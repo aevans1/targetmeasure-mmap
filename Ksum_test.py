@@ -32,9 +32,7 @@ def main():
     eps_vals = 2.0**np.arange(-20, 10, 0.5)
     Ksums = np.zeros((2, len(eps_vals)))
     chi_logs = np.zeros_like(Ksums) 
-    errors = np.zeros_like(Ksums)
     optimal_eps_vals = np.zeros(2)
-    optimal_error_vals = np.zeros(2)
     for dataset in datasets:
         fname = f"systems/MoroCardin/data/data_solution_{dataset}.npz"
         inData = np.load(fname)

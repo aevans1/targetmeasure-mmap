@@ -497,7 +497,6 @@ class TargetMeasureMahalanobisDiffusionMap(TargetMeasureDiffusionMap):
             self.diffusion_list = self.diffusion_list[nonisolated_bool, :, :]
 
         # Use determinant in normalizing if we are doing kde normalization or targetMMAP 
-        print(f"Computing determinants with power: {a}" )
         for n in range(N):
             M = self.diffusion_list[n, :, :]
             pi[n] = self.target_measure[n]*((np.linalg.det(M))**(-a/2))
