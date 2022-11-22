@@ -319,7 +319,6 @@ class TargetMeasureDiffusionMap(object):
         q[B_bool] = 1
         row_sum = np.array(np.sum(Lcb, axis=1)).ravel()
 
-        # TODO: sparsity
         if sps.issparse(L):
             q[C_bool] = sps.linalg.spsolve(Lcc, -row_sum)
         else:
@@ -351,7 +350,6 @@ class TargetMeasureDiffusionMap(object):
             Committor function with respect to sets defined by B_bool, C_bool
         """
 
-        # Restrict B, C to subgraph from radius sparsity
         subgraph = self.get_subgraph()
         nonisolated_bool = subgraph["nonisolated_bool"]
         C_bool = C_bool[nonisolated_bool]
