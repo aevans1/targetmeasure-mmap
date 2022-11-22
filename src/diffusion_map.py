@@ -325,56 +325,6 @@ class TargetMeasureDiffusionMap(object):
             q[C_bool] = np.linalg.solve(Lcc, -row_sum)
         return q, self.subgraph
 
-    def construct_committor_symmetric(self, B_bool, C_bool):
-        r"""Constructs the committor function w.r.t to product set A, reactant set B, C = domain \ (A U B) using the generator L
-
-        Applies boundary conditions and restricts L to solve 
-        solve Lq = 0, with q(A) = 0, q(B) = 1
-
-        Parameters
-        ----------
-
-        L : sparse array, num data points x num data points
-            generator matrix corresponding to a data set, generally the L
-                matrix from diffusion maps
-        B_bool : boolean vector
-            indicates data indices corresponding to reactant B, same length
-                as number of data points
-        C_bool : boolean vector
-            indicates data indices corresponding to transition region domain
-                \ (A U B), same length as number of data points
-
-        Returns
-        ---------
-        q : vector
-            Committor function with respect to sets defined by B_bool, C_bool
-        """
-
-        subgraph = self.get_subgraph()
-        nonisolated_bool = subgraph["nonisolated_bool"]
-        C_bool = C_bool[nonisolated_bool]
-        B_bool = B_bool[nonisolated_bool]
-
-        # ONLY NEW LINE
-        L = self.get_generator_symmetric()
-
-        Lcb = L[C_bool, :]
-        Lcb = Lcb[:, B_bool]
-        Lcc = L[C_bool, :]
-        Lcc = Lcc[:, C_bool]
-
-        # Assign boundary conditions for q, then solve L(C,C)q(C) = L(C,B)1
-        q = np.zeros(L.shape[1])
-        q[B_bool] = 1
-        row_sum = np.array(np.sum(Lcb, axis=1)).ravel()
-
-        if sps.issparse(L):
-            #q[C_bool] = sps.linalg.spsolve(Lcc, -row_sum)
-            q[C_bool] = sps.linalg.cg(Lcc, -row_sum)[0]
-        else:
-            q[C_bool] = np.linalg.solve(Lcc, -row_sum)
-        return q, self.subgraph
-
     def construct_MFPT(self, B_bool, C_bool):
         r"""Constructs the mean first passage time w.r.t to set B, C = domain \ (B) using the generator L
 
