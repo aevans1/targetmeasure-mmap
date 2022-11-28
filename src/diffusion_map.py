@@ -447,7 +447,7 @@ class TargetMeasureMahalanobisDiffusionMap(TargetMeasureDiffusionMap):
         # Use determinant in normalizing if we are doing kde normalization or targetMMAP 
         for n in range(N):
             M = self.diffusion_list[n, :, :]
-            pi[n] = self.target_measure[n]*((np.linalg.det(M))**(-a/2))
+            pi[n] = self.target_measure[n]*((np.linalg.det(M))**(a/2))
 
         if sps.issparse(K):
             # Right Normalize
@@ -574,107 +574,6 @@ class TargetMeasureMahalanobisDiffusionMap(TargetMeasureDiffusionMap):
                 raise
         return chol
 
-    # NOTE: This is a test function to try out making a `bistochastic` kernel with respect to pi / self.rho
-    #def construct_bistochastic(self, data):
-    #    
-    #    K = self._construct_kernel(data)
-    #    N = K.shape[-1]     # Number of data points
-    #    subgraph = self.get_subgraph()
-    #    nonisolated_bool = subgraph["nonisolated_bool"]
-    #    pi = np.zeros(N)    # initialize right normalization
-    #    
-    #    # Adjust right normalization for whether we are unbiasing with a 
-    #    #   1) KDE estimate or  2) mahalanobis kernel sum
-    #    if self.density_mode == 'KDE':
-    #        print("Doing KDE normalization")
-    #        a = -1
-    #        if self.rho is None:
-    #            print("computing rho from kernel")
-    #            self.rho = self._compute_kde(data)
-    #    else:
-    #        print("Doing MMAP normalization")
-    #        a = 1
-    #        self.rho = np.array(K.sum(axis=1)).ravel()
-
-    #    if self.target_measure is None:
-    #        print("Doing regular MMAP")
-    #        self.target_measure = self.rho
-    #        a = 0
-    #    
-    #    # Make sure we are using correct indices of the subgraph
-    #    if len(self.rho) > N: 
-    #        self.rho = self.rho[nonisolated_bool] 
-    #    if len(self.target_measure) > N: 
-    #        self.target_measure = self.target_measure[nonisolated_bool]
-    #    if self.diffusion_list.shape[0] > N: 
-    #        self.diffusion_list = self.diffusion_list[nonisolated_bool, :, :]
-    #    #########################################################
-
-    #    # Use determinant in normalizing if we are doing kde normalization or targetMMAP 
-    #    print(f"Computing determinants with power: {a}" )
-    #    a = 1
-    #    for n in range(N):
-    #        M = self.diffusion_list[n, :, :]
-    #        pi[n] = self.target_measure[n]*((np.linalg.det(M))**(a/2))
-
-    #    if sps.issparse(K):
-    #        # Make right normalizing vector
-    #        winv = pi/self.rho
-    #        Winv = sps.spdiags(winv, 0, N, N) 
-    #        Dnew = sps.eye(N, N)
-    #        Dprimenew = sps.eye(N, N)
-    #        for i in range(100):
-    #            D = Dnew
-    #            Dprime = Dprimenew
-
-    #            Dinv = sps.spdiags((np.array(D.diagonal()).ravel())**(-1), 0, N , N)
-    #            Dprimeinv = sps.spdiags((np.array(Dprime.diagonal()).ravel())**(-1), 0, N , N)
-
-    #            Dnew = np.array((K @ Dinv @ Dprimeinv.power(0.5) @ Winv).sum(axis=1).ravel())
-    #            Dnew = sps.spdiags(Dnew, 0, N, N)
-    #            
-    #            Dprime = np.array((Dinv @ K @ Dinv @ Winv).sum(axis=1).ravel())
-    #            Dprime = sps.spdiags(Dprime, 0, N, N)
-
-    #            if i % 100 == 0:
-    #                print(i)
-    #                Dtest = (Dnew.power(0.5))*(D.power(0.5))
-    #                aux = np.array(Dtest.diagonal()).ravel()
-    #                Dtest_inv = sps.spdiags(aux**-1, 0, N, N)
-    #                print(np.array(np.sum(Dtest_inv.dot(K.dot(Dtest_inv.dot(Winv))), axis=1)).ravel())
-
-    #        D = Dnew.power(0.5)*D.power(0.5)
-    #        Dinv = sps.spdiags((np.array(D.diagonal()).ravel())**(-1), 0, N , N)
-    #        self.K_reweight = Dinv @ K @ Dinv
-    #        P = self.K_reweight @ Winv
-    #        self.P = P
-    #        self.winv = winv
-    #        L = (P - sps.eye(N, N))/self.epsilon
-
-    #        self.Winv = Winv
-    #    
-    #    else:
-    #        print("Doing dense matrix calculations")
-    #        # Make right normalizing vector
-    #        right_normalizer = np.diag(self.rho**(-1)).dot(np.diag(self.target_measure**(0.5)))
-    #        
-    #        #K_rnorm = K.dot(right_normalizer)
-    #        K_reweight = right_normalizer.dot(K.dot(right_normalizer))
-
-    #        # Make left normalizing vector
-    #        rowsums = np.array(K_reweight.sum(axis=1)).ravel()
-    #        
-    #        left_normalizer = np.diag(rowsums**(-1))
-    #        
-    #        P = left_normalizer.dot(K_reweight) 
-
-    #        L = (P - np.eye(N))/self.epsilon
-    #        self.stationary_measure = rowsums
-    #        self.right_normalizer = right_normalizer 
-
-    #    self.L = L
-
-    #    return L
-
+  
 if __name__ == '__main__':
     main()

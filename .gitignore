@@ -8,7 +8,8 @@
 # My Folders
 converters/
 .vscode/
-systems/aladip
+systems/aladip/data/best_data/
+systems/aladip/data/worst_data/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
