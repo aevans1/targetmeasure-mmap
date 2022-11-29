@@ -25,22 +25,53 @@ def duchamp(A, f, g, pbc_dims=None, PBC_ARG1=False, PBC_ARG2=False):
     Returns:
         out: num_data points x 1 vector, index i is sum_j A_ij (f_i - f_j)(g_i - g_j) 
     """    
-    
-    # F, G are pairwise diff matrices for vectors f,g:
+    # NOTE: A should be a square matrix with each row summing to 0
+    # F, G below are pairwise diff matrices for vectors f,g:
     # F[i, j] = f[j] - f[i]
-    F = f[np.newaxis, ...] - f[:, np.newaxis, ...]
-    G = g[np.newaxis, ...] - g[:, np.newaxis, ...]
-    if pbc_dims is not None:
-        if PBC_ARG1:
-            F = periodic_restrict(F, pbc_dims)
-        if PBC_ARG2:
-            G = periodic_restrict(G, pbc_dims)
-    if np.shape(A) == np.shape(F): 
-        if sps.issparse(A):
-            out = np.array(A.multiply(F*G).sum(axis=1)).ravel()
+
+    # Use vectorized computation for smaller datasets 
+    if A.shape[0] < 5000: 
+        F = f[np.newaxis, ...] - f[:, np.newaxis, ...]
+        G = g[np.newaxis, ...] - g[:, np.newaxis, ...]
+        if pbc_dims is not None:
+            if PBC_ARG1:
+                F = periodic_restrict(F, pbc_dims)
+            if PBC_ARG2:
+                G = periodic_restrict(G, pbc_dims)
+        out = np.sum(A*F*G, axis=1).ravel()
+        # If A has row sums 0 and there's no periodic restrictions, above is equivalent to
+        # out = np.dot(A, f*g) - f*np.dot(A, g) - g*np.dot(A ,f)
+
+    # If a larger dataset, go row-by-row and don't make F,G matrices
+    else: 
+        out = np.zeros(A.shape[0])
+        if pbc_dims is not None:
+            if PBC_ARG1 and PBC_ARG2:
+                for i in range(A.shape[0]):
+                    F_row = periodic_restrict(f - f[i], pbc_dims)
+                    G_row = periodic_restrict(g - g[i], pbc_dims)
+                    out[i] = np.sum(A[i, :]*F_row*G_row)
+            elif PBC_ARG1:
+                #pbc for just first arg
+                for i in range(A.shape[0]):
+                    F_row = periodic_restrict(f - f[i], pbc_dims)
+                    G_row = g - g[i]
+                    out[i] = np.sum(A[i, :]*F_row*G_row)
+            elif PBC_ARG2:
+                # pbc for just second arg
+                for i in range(A.shape[0]):
+                    F_row = f - f[i]
+                    G_row = periodic_restrict(g - g[i], pbc_dims)
+                    out[i] = np.sum(A[i, :]*F_row*G_row)
         else:
-            out = np.array(np.sum(sps.csr_matrix(A*F*G), axis=1)).ravel()
+            for i in range(A.shape[0]):
+                F_row = f[i] - f
+                G_row = g[i] - f
+                out[i] = np.sum(A[i, :]*F_row*G_row)
     return out
+
+
+
 
 def dirichlet_form(A, f, g, pbc_dims=None):
     N = f.shape[0]

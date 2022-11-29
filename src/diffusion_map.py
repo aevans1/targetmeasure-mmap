@@ -139,7 +139,7 @@ class TargetMeasureDiffusionMap(object):
             self.right_normalizer = right_normalizer 
 
         else:
-            print("Doing dense matrix calculations")
+            print("Not a sparse kernel, doing dense matrix calculations")
             rho_inv = np.power(self.rho,-1)
             sqrt_pi = np.power(self.target_measure, 0.5)
 
@@ -190,10 +190,10 @@ class TargetMeasureDiffusionMap(object):
             # Check sparsity of kernel
             num_entries = K.shape[0]**2
             nonzeros_ratio = K.nnz / (num_entries)
-            print(f"ratio of nonzeros: {nonzeros_ratio}")
+            print(f"Ratio of nonzeros to zeros in kernel matrix: {nonzeros_ratio}")
             if nonzeros_ratio > 0.5:
                 # Convert to dense matrix
-                print("shifting to dense")
+                print("Not a sparse kernel, converting to dense numpy array")
                 #self.dense = True
                 K = K.toarray()
 
@@ -221,13 +221,13 @@ class TargetMeasureDiffusionMap(object):
                       sparse matrix of squared distances
         """
         if self.neigh_mode == 'KNN':
-            print("computing KNN kernel")
+            print("Computing KNN kernel")
             neigh = NearestNeighbors(n_neighbors = self.n_neigh,
                                      metric='precomputed')
             neigh.fit(sqdists)
             sqdists = neigh.kneighbors_graph(sqdists, mode='distance')
         elif self.neigh_mode == 'RNN':
-            print("computing RNN kernel")
+            print("Computing RNN kernel")
             eps_radius = 3*np.sqrt(self.epsilon)
             if self.radius == None:
                 self.radius = eps_radius
@@ -254,7 +254,7 @@ class TargetMeasureDiffusionMap(object):
         # Store subgraph of nodes which we use for the algorithm 
         subgraph = {}
         subgraph["nonisolated_bool"] = nonisolated_bool
-        print(f"nodes left after removing isolated: {sqdists.shape[0]}")
+        print(f"Number of nodes left after removing isolated: {sqdists.shape[0]}")
         self.subgraph = subgraph
         return sqdists
 
@@ -270,7 +270,7 @@ class TargetMeasureDiffusionMap(object):
         return sqdists
 
     def _compute_kde(self, data):
-        print("computing kde")
+        print("Computing kde")
         d = data.shape[0]
         N = self.K.shape[1]
         kde = np.array(self.K.sum(axis=1)).ravel()
@@ -434,7 +434,7 @@ class TargetMeasureMahalanobisDiffusionMap(TargetMeasureDiffusionMap):
 
         # Use kde as target measure if none provided
         if self.target_measure is None:
-            print("Doing regular MMAP")
+            print("No target measure provided, doing regular MMAP")
             self.target_measure = self.rho
             a = 0
 
@@ -470,7 +470,7 @@ class TargetMeasureMahalanobisDiffusionMap(TargetMeasureDiffusionMap):
             self.right_normalizer = right_normalizer 
 
         else:
-            print("Doing dense matrix calculations")
+            print("Doing dense kernel matrix calculations")
             rho_inv = np.power(self.rho, -1)
             sqrt_pi = np.power(pi, 0.5)
             # Right Normalize
@@ -510,7 +510,7 @@ class TargetMeasureMahalanobisDiffusionMap(TargetMeasureDiffusionMap):
 
         sqdists = np.zeros((N, N))
         if metric == 'mahalanobis':
-            print("Computing Mahalanobis distance")
+            print("Computing Mahalanobis distance matrix")
             self._compute_inv_chol_covs(N, dim)
             for n in range(N):
                 diffs_row = data[:, n, np.newaxis] - data
@@ -568,7 +568,7 @@ class TargetMeasureMahalanobisDiffusionMap(TargetMeasureDiffusionMap):
             chol = np.linalg.cholesky(M)
         except np.linalg.LinAlgError as err:
             if 'positive definite' in str(err):
-                print(f"index {n} covar is NOT positive definite, using cholesky hack")
+                print(f"Index {n} covar is NOT positive definite, using cholesky hack")
                 chol = helpers.cholesky_hack(M)
             else:
                 raise
