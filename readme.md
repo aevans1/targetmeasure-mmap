@@ -10,5 +10,5 @@ The examples available in rough .ipynb form are:
 There are python scripts available for the `Ksum test' on the datasets, Ksumtest_datasetname.py
 
 ### In progress:
- - Uploading and cleaning up of plumed scripts for the alanine dipeptide in vacuum
+ - Uploading and cleaning up of plumed scripts for diffusion matrices of alanine dipeptide in vacuum
  - Cleaning up the .ipynb for readability
