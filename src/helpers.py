@@ -130,7 +130,7 @@ def periodic_restrict(x, boundary):
     """Restricts an array x to comply with periodic boundary conditions
 
     example: x = np.array([100, 700, -500]), boundary = np.array([360])
-            will return y = np.array([0.2, 340, -140 ])
+            will return y = np.array([100, 340, -140 ])
 
     Args:
         x (array): np array of size (m, n) or (n,)
