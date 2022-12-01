@@ -66,7 +66,7 @@ def duchamp(A, f, g, pbc_dims=None, PBC_ARG1=False, PBC_ARG2=False):
         else:
             for i in range(A.shape[0]):
                 F_row = f[i] - f
-                G_row = g[i] - f
+                G_row = g[i] - g
                 out[i] = np.sum(A[i, :]*F_row*G_row)
     return out
 
