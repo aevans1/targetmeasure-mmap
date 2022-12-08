@@ -29,6 +29,10 @@ def duchamp(A, f, g, pbc_dims=None, PBC_ARG1=False, PBC_ARG2=False):
     # F, G below are pairwise diff matrices for vectors f,g:
     # F[i, j] = f[j] - f[i]
 
+    # Convert csr matrices to dense numpy arrays
+    if sps.issparse(A):
+        A = A.toarray()
+
     # Use vectorized computation for smaller datasets 
     if A.shape[0] < 5000: 
         F = f[np.newaxis, ...] - f[:, np.newaxis, ...]
