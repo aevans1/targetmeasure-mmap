@@ -11,7 +11,7 @@ There are python scripts available for the `Ksum test' on the datasets, Ksumtest
 
 ### In progress:
  - Step-by-step process for alanine dipeptide in vacuum data (at current state these aren't runnable by themselves, they currently serve as a reference):
-   - Gromacs simulation files for alanine dipeptide in vacuum (see [Some_Gromacs_Files](molecular_dynamics/Some_Gromacs_Files/))
+   - Gromacs simulation files for alanine dipeptide in vacuum (see [Some_Gromacs_Files](molecular_dynamics/Some_Gromacs_Files/)), used from [Plumed Masterclass 21.6](https://www.plumed.org/doc-v2.7/user-doc/html/masterclass-21-6.html)
    - Simulation with a static metadynamics bias (see [Some_Plumed_Files](molecular_dynamics/Some_Plumed_Files))
    - Free energy computation on $\Phi, \Psi$ grid with metadynamics (see [Some_Plumed_Files](molecular_dynamics/Some_Plumed_Files)) 
    - Restrained Simulations for diffusion matrices on grid (for finite element method validation) and on trajectory (see [multirun files](molecular_dynamics/))
