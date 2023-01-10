@@ -1,0 +1,15 @@
+RESTART
+# set up two variables for dihedral angles 
+phi: TORSION ATOMS=5,7,9,15
+psi: TORSION ATOMS=7,9,15,17
+theta: TORSION ATOMS=6,5,7,9
+xi: TORSION ATOMS=16,15,17,19
+
+# Activate metadynamics in phi and psi
+# with large enough PACE, and with RESTART on (above), 
+# that the bias from the HILLS file is a static bias
+
+static: METAD ARG=phi,psi PACE=1000000000 HEIGHT=0 SIGMA=0.2,0.2 FILE=TRAJ_HILLS_2VAR_GRID BIASFACTOR=10.0 TEMP=300.0 RESTART=YES GRID_MIN=-pi,-pi GRID_MAX=pi,pi GRID_BIN=128,128 CALC_RCT
+# monitor the two variables and the metadynamics bias potential
+PRINT STRIDE=100 ARG=phi,psi,theta,xi,static.bias,static.rct,static.rbias FILE=TRAJ_COLVAR_METAD_2VAR_GRID_STATIC
+DUMPPROJECTIONS ARG=phi,psi,theta,xi STRIDE=100 FILE=derivs_wtmetad_static

@@ -1,0 +1,22 @@
+# set up two variables for dihedral angles 
+phi: TORSION ATOMS=5,7,9,15
+psi: TORSION ATOMS=7,9,15,17
+theta: TORSION ATOMS=6,5,7,9
+xi: TORSION ATOMS=16,15,17,19
+
+# Activate metadynamics in phi and psi
+# depositing a Gaussian every 200 time steps,
+# with height equal to 1.2 kJ/mol,
+# and width 0.2 rad for both CVs.
+# Well-tempered metadynamics is activated,
+# and the biasfactor is set to 10.0
+#
+metad: METAD ... 
+ARG=phi,psi PACE=200 HEIGHT=1.2 SIGMA=0.2,0.2
+biasfactor=10.0 TEMP=300 CALC_RCT
+GRID_MIN=-pi,-pi GRID_MAX=pi,pi GRID_BIN=128,128
+FILE=TRAJ_HILLS_2VAR_GRID
+...
+
+# monitor the two variables and the metadynamics bias potential
+PRINT STRIDE=100 ARG=phi,psi,theta,xi,metad.bias,metad.rct,metad.rbias FILE=TRAJ_COLVAR_METAD_2VAR_GRID
