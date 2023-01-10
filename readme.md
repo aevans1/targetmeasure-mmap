@@ -15,5 +15,5 @@ There are python scripts available for the `Ksum test' on the datasets, Ksumtest
    - Simulation with a static metadynamics bias (see [Some_Plumed_Files](molecular_dynamics/Some_Plumed_Files))
    - Free energy computation on $\Phi, \Psi$ grid with metadynamics (see [Some_Plumed_Files](molecular_dynamics/Some_Plumed_Files)) 
    - Restrained Simulations for diffusion matrices on grid (for finite element method validation) and on trajectory (see [multirun files](molecular_dynamics/))
-- **Note**: The plumed used for this was a custom plumed recompiled particularly with an [adjusted DUMPPROJECTIONS](molecular_dynamics/Some_Plumed_Files/Value.cpp) ([plumed documentation](https://www.plumed.org/doc-v2.7/user-doc/html/_d_u_m_p_p_r_o_j_e_c_t_i_o_n_s.html)) so that it computes with the mass matrix as in equation (6) of our tm-mmap paper.   
+- **Note**: The plumed used for this was a custom plumed recompiled particularly with an [adjusted DUMPPROJECTIONS](molecular_dynamics/Some_Plumed_Files/Value.cpp) ([plumed documentation](https://www.plumed.org/doc-v2.7/user-doc/html/_d_u_m_p_p_r_o_j_e_c_t_i_o_n_s.html)) in plumed/src/core/value.cpp so that it computes with the mass matrix as in equation (6) of our tm-mmap paper.   
  - Cleaning up the .ipynb for readability
