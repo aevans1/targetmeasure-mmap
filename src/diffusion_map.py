@@ -5,7 +5,7 @@ Github: https://github.com/DiffusionMapsAcademics/pyDiffMap/blob/master/docs/usa
 """
 import numpy as np 
 import scipy.sparse as sps
-from scipy.linalg.lapack import clapack as cla
+import scipy.linalg.lapack as lapack
 from sklearn.neighbors import NearestNeighbors
 
 import src.helpers as helpers
@@ -429,14 +429,12 @@ class TargetMeasureMahalanobisDiffusionMap(TargetMeasureDiffusionMap):
         nonisolated_bool = subgraph["nonisolated_bool"]
         pi = np.zeros(N)    # initialize right normalization
 
-        a = -1
         self.rho = self._compute_kde(data)
 
         # Use kde as target measure if none provided
         if self.target_measure is None:
             print("No target measure provided, doing regular MMAP")
             self.target_measure = self.rho
-            a = 0
 
         # Make sure we are using correct indices of the subgraph
         if len(self.target_measure) > N: 
@@ -447,7 +445,7 @@ class TargetMeasureMahalanobisDiffusionMap(TargetMeasureDiffusionMap):
         # Use determinant in normalizing if we are doing kde normalization or targetMMAP 
         for n in range(N):
             M = self.diffusion_list[n, :, :]
-            pi[n] = self.target_measure[n]*((np.linalg.det(M))**(a/2))
+            pi[n] = self.target_measure[n]*((np.linalg.det(M))**(-1/2))
 
         if sps.issparse(K):
             # Right Normalize
@@ -553,7 +551,7 @@ class TargetMeasureMahalanobisDiffusionMap(TargetMeasureDiffusionMap):
         if self.diffusion_list is not None:
             for n in range(N):
                 chol = self.compute_cholesky(self.diffusion_list[n, :, :], n)
-                inv_chol_covs[n, :, :] = cla.dtrtri(chol, lower=1)[0]
+                inv_chol_covs[n, :, :] = lapack.dtrtri(chol, lower=1)[0]
             self.inv_chol_covs = inv_chol_covs
         else: 
             print("Defaulting to regular dmaps, no diffusion matrices provided")
