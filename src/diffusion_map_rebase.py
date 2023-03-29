@@ -10,7 +10,7 @@ def main():
     np.random.seed(30)
     ### Set up data
     num_features = 2
-    num_samples = 10000
+    num_samples = 5000
     data = np.random.randn(num_samples, num_features) 
     #data = np.random.uniform(-2, 2, size=(num_samples, num_features)) 
 
@@ -30,6 +30,11 @@ def main():
     dist_b = ((data[:, 0] - center_b[0])**2 + (data[:, 1] - center_b[1])**2)**(0.5)
     A = dist_a < radius
     B = dist_b < radius
+
+    norms = (data[:, 0]**2  + data[:, 1]**2)**(0.5)
+    A = norms < 0.1
+    B = norms > 2
+    
     C = np.ones(num_samples, dtype=bool)
     C[A] = False
     C[B] = False
@@ -37,9 +42,9 @@ def main():
     ### Create distance matrix
     neigh = NearestNeighbors(radius = eps_radius)
     neigh.fit(data)
-    #sqdists = neigh.radius_neighbors_graph(data, mode="distance") 
-    kdtree = scipy.spatial.KDTree(data)
-    sqdists = kdtree.sparse_distance_matrix(kdtree, eps_radius, output_type='coo_matrix')
+    sqdists = neigh.radius_neighbors_graph(data, mode="distance") 
+    #kdtree = scipy.spatial.KDTree(data)
+    #sqdists = kdtree.sparse_distance_matrix(kdtree, eps_radius, output_type='coo_matrix')
     print(f"Data type of squared distance matrix: {type(sqdists)}")
 
     # Find isolated points
@@ -80,16 +85,25 @@ def main():
     q = np.zeros(num_samples)
     q[B] = 1
     row_sum = np.asarray(Lcb.sum(axis=1)).squeeze()
-    print(q[C_nonisolated].shape)
-    print(Lcc.shape)
-    print(row_sum.shape)
     q[C_nonisolated] = sps.linalg.spsolve(Lcc, -row_sum)
     q[isolated] = np.nan
     
     plt.figure()
     plt.scatter(data[:, 0], data[:, 1], s=1, c=q)
+
+    ### Gradients
+    Q = sps.spdiags(q, 0, num_samples, num_samples)
+    F = sps.spdiags(data[:,0], 0, num_samples, num_samples)
+    G = sps.spdiags(data[:,1], 0, num_samples, num_samples)
+    H = sps.spdiags(kde, 0, num_samples, num_samples)
+    curr = np.zeros((num_samples, 2))
+    curr[:, 0]  = np.asarray((H @ (L@Q@F - F@L@Q - Q@L@F + Q@F@L)).sum(axis=1)).squeeze()
+    curr[:, 1]  = np.asarray((H @ (L@Q@G - G@L@Q - Q@L@G + Q@G@L)).sum(axis=1)).squeeze()
+    plt.figure()
+    plt.scatter(data[:, 0], data[:, 1],c=((curr[:, 0]**2 + curr[:, 1]**2)**(0.5)), cmap='turbo', s=10)
+    plt.quiver(data[:, 0], data[:, 1], curr[:, 0], curr[:, 1], angles='xy', scale_units='xy', scale=0.01, headwidth=2, minlength=0)
     plt.show()
-    
+
     return None
 
 if __name__ == '__main__':
