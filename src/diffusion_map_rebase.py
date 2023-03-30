@@ -24,6 +24,8 @@ def main():
     eps_radius = 3*np.sqrt(epsilon)
     #target_measure = None 
     radius = 0.1
+
+    ### Set up A, B
     center_a = np.array([-1, -1])
     center_b = np.array([1, 1])
     dist_a = ((data[:, 0] - center_a[0])**2 + (data[:, 1] - center_a[1])**2)**(0.5)
@@ -70,7 +72,6 @@ def main():
     kde = np.asarray(K.sum(axis=1)).squeeze()
     kde *=  (1.0/num_samples)*(2*np.pi*epsilon)**(-num_features/2) 
     u = kde**(-1/2)
-    u[np.isnan(u)] = 0.0
     U = sps.spdiags(u, 0, num_samples, num_samples) 
     W = U @ K @ U
     stationary = np.asarray(W.sum(axis=1)).squeeze()
@@ -99,6 +100,7 @@ def main():
     curr = np.zeros((num_samples, 2))
     curr[:, 0]  = np.asarray((H @ (L@Q@F - F@L@Q - Q@L@F + Q@F@L)).sum(axis=1)).squeeze()
     curr[:, 1]  = np.asarray((H @ (L@Q@G - G@L@Q - Q@L@G + Q@G@L)).sum(axis=1)).squeeze()
+
     plt.figure()
     plt.scatter(data[:, 0], data[:, 1],c=((curr[:, 0]**2 + curr[:, 1]**2)**(0.5)), cmap='turbo', s=10)
     plt.quiver(data[:, 0], data[:, 1], curr[:, 0], curr[:, 1], angles='xy', scale_units='xy', scale=0.01, headwidth=2, minlength=0)
