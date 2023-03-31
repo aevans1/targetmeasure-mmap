@@ -37,8 +37,29 @@ def main():
     num_features = new_data.shape[1]
     num_samples = new_data.shape[0]
 
+    eps_vals = 2.0**np.arange(-12, -4, 1)
+    [Ksum, chi_log_analytical, optimal_eps] = Ksum_test(eps_vals, new_data, target_measure)
+    print(f"optimal_eps = {optimal_eps}")
+
+    plt.figure()
+    plt.plot(eps_vals, Ksum)
+    plt.xscale("log", base=10)
+    plt.yscale("log", base=10)
+    plt.axvline(x=optimal_eps, ls='--')
+
+    plt.figure()
+    plt.plot(eps_vals, chi_log_analytical)
+    plt.title("log Ksums")
+    plt.xscale("log", base=10)
+    plt.yscale("log", base=10)
+    plt.title("dlog_Sum/dlog_eps")
+    plt.axvline(x=optimal_eps, ls='--')
+    #plt.savefig(fname, dpi=300)
+    plt.show() 
+
+
     # Define A,B sets, based on [0, pi] shifted dihedrals
-    radius = 0.1
+    radius = 0.2
     Acenter = np.pi
     Bcenter = np.pi/3
 
@@ -50,7 +71,7 @@ def main():
     C[B] = False
 
     # Run diffusion map
-    epsilon  = 0.0005
+    epsilon  = optimal_eps
 
     [_, L, nonisolated] = create_laplacian(new_data, target_measure, epsilon)
     q = solve_committor(L, B, C, nonisolated, num_samples)
@@ -64,7 +85,7 @@ def create_laplacian(data, target_measure, epsilon):
     num_samples = data.shape[0]
 
     ### Create distance matrix
-    eps_radius = 3*np.sqrt(epsilon)
+    eps_radius = np.sqrt(epsilon)
     neigh = NearestNeighbors(radius = eps_radius)
     neigh.fit(data)
     sqdists = neigh.radius_neighbors_graph(data, mode="distance") 
@@ -80,7 +101,7 @@ def create_laplacian(data, target_measure, epsilon):
     K = K[:, nonisolated]
     num_nodes = K.shape[0]
 
-    K.data = np.exp(-K.data / (2*epsilon))
+    K.data = np.exp(-K.data**2 / (2*epsilon))
     print(f"Data type of kernel: {type(K)}")
 
     # Check sparsity of kernel
@@ -116,6 +137,68 @@ def solve_committor(L, B, C, nonisolated, num_samples):
     q[np.logical_and(C,nonisolated)] = sps.linalg.spsolve(Lcc, -row_sum)
     q[~nonisolated] = np.nan
     return q
+
+def Ksum_test(eps_vals, data, target_measure):
+
+    num_idx = eps_vals.shape[0]
+    Ksum = np.zeros(num_idx)
+    chi_log_analytical = np.zeros(num_idx)
+    
+    for i in range(num_idx):
+        # Construct sparsified sqdists, kernel and generator with radius nearest neighbors 
+        epsilon = eps_vals[i]
+        print(f"doing epsilon {i}")
+        radius = None
+
+        # put a maximum for the radius in radius-nearest neighbors
+        if epsilon > 0.5:
+            eps_radius = (3*np.sqrt(0.5))**(0.5)
+        
+        num_features = data.shape[1]
+        num_samples = data.shape[0]
+
+        ### Create distance matrix
+        eps_radius = np.sqrt(epsilon)
+        neigh = NearestNeighbors(radius = eps_radius)
+        neigh.fit(data)
+        sqdists = neigh.radius_neighbors_graph(data, mode="distance") 
+    
+        # Find isolated points, adjust distance matrix for nonisolated points
+        isolated = np.asarray(sqdists.sum(axis=1)).squeeze() == 0
+        nonisolated = ~isolated
+        sqdists = sqdists[nonisolated, :]
+        sqdists = sqdists[:, nonisolated] 
+
+        ### Create Kernel
+        # Kernel should only look at nonisolated points
+        K = sqdists.copy()
+        K.data = np.exp(-K.data**2 / (2*epsilon))
+        num_nodes = K.shape[0]
+        
+        num_entries = K.shape[0]**2
+        nonzeros_ratio = K.nnz / (num_entries)
+        print(f"Ratio of nonzeros to zeros in kernel matrix: {nonzeros_ratio}")
+
+        ### Create target measure symmetric kernel
+        kde = np.asarray(K.sum(axis=1)).squeeze()
+        kde *=  (1.0/num_samples)*(2*np.pi*epsilon)**(-num_features/2) 
+        u = (target_measure[nonisolated]**(0.5)) / kde
+        U = sps.spdiags(u, 0, num_nodes, num_nodes) 
+        W = U @ K @ U
+        Ksum[i] = W.sum(axis=None)
+
+        # Compute deriv of log Ksum w.r.t log epsilon ('chi log')
+        mat = W.multiply(sqdists)
+        chi_log_analytical[i] = mat.sum(axis=None)  / ((2*epsilon)*Ksum[i])
+        print(f"epsilon: {epsilon}")
+        print(f"chi log: {chi_log_analytical[i]}")
+        print("\n") 
+        optimal_eps = eps_vals[np.nanargmax(chi_log_analytical)]
+    return [Ksum, chi_log_analytical, optimal_eps]
+
+
+
+
 
 if __name__ == '__main__':
     main()

@@ -10,10 +10,9 @@ def main():
     np.random.seed(30)
     ### Set up data
     num_features = 2
-    num_samples = 5000
+    num_samples = 10000
     data = np.random.randn(num_samples, num_features) 
     #data = np.random.uniform(-2, 2, size=(num_samples, num_features)) 
-
 
     plt.scatter(data[:, 0], data[:, 1], s=0.1)
 
@@ -60,7 +59,7 @@ def main():
 
     ### Create Kernel
     K = sqdists.copy()
-    K.data = np.exp(-K.data / (2*epsilon))
+    K.data = np.exp(-K.data**2 / (2*epsilon))
     print(f"Data type of kernel: {type(K)}")
 
     # Check sparsity of kernel
@@ -103,7 +102,7 @@ def main():
 
     plt.figure()
     plt.scatter(data[:, 0], data[:, 1],c=((curr[:, 0]**2 + curr[:, 1]**2)**(0.5)), cmap='turbo', s=10)
-    plt.quiver(data[:, 0], data[:, 1], curr[:, 0], curr[:, 1], angles='xy', scale_units='xy', scale=0.01, headwidth=2, minlength=0)
+    plt.quiver(data[:, 0], data[:, 1], curr[:, 0], curr[:, 1], angles='xy', scale_units='xy', headwidth=2, minlength=0)
     plt.show()
 
     return None
