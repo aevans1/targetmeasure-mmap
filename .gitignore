@@ -82,3 +82,4 @@ ENV/
 env.bak/
 venv.bak/
 
+*tempCodeRunnerFile.py
