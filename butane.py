@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 def main():
 
     # Load data
-    fname = "systems/butane/data/butane_hightemp.npz"
+    fname = "systems/butane/data/butane_metad.npz"
     inData = np.load(fname)
     print("Keys in data:")
     print(list(inData.keys()))
@@ -37,44 +37,45 @@ def main():
     num_features = new_data.shape[1]
     num_samples = new_data.shape[0]
 
-    eps_vals = 2.0**np.arange(-12, -4, 1)
-    [Ksum, chi_log_analytical, optimal_eps] = Ksum_test(eps_vals, new_data, target_measure)
-    print(f"optimal_eps = {optimal_eps}")
+    #eps_vals = 2.0**np.arange(-12, -4, 1)
+    #[Ksum, chi_log_analytical, optimal_eps] = Ksum_test(eps_vals, new_data, target_measure)
+    #print(f"optimal_eps = {optimal_eps}")
 
-    plt.figure()
-    plt.plot(eps_vals, Ksum)
-    plt.xscale("log", base=10)
-    plt.yscale("log", base=10)
-    plt.axvline(x=optimal_eps, ls='--')
+    #plt.figure()
+    #plt.plot(eps_vals, Ksum)
+    #plt.xscale("log", base=10)
+    #plt.yscale("log", base=10)
+    #plt.axvline(x=optimal_eps, ls='--')
 
-    plt.figure()
-    plt.plot(eps_vals, chi_log_analytical)
-    plt.title("log Ksums")
-    plt.xscale("log", base=10)
-    plt.yscale("log", base=10)
-    plt.title("dlog_Sum/dlog_eps")
-    plt.axvline(x=optimal_eps, ls='--')
-    #plt.savefig(fname, dpi=300)
-    plt.show() 
+    #plt.figure()
+    #plt.plot(eps_vals, chi_log_analytical)
+    #plt.title("log Ksums")
+    #plt.xscale("log", base=10)
+    #plt.yscale("log", base=10)
+    #plt.title("dlog_Sum/dlog_eps")
+    #plt.axvline(x=optimal_eps, ls='--')
+    ##plt.savefig(fname, dpi=300)
 
 
     # Define A,B sets, based on [0, pi] shifted dihedrals
-    radius = 0.1
-    Acenter = np.pi
+    radius = 0.2
+    Acenter = -np.pi/3
     Bcenter = np.pi/3
-
+    #A = np.abs(dihedrals_shift[::sub] - Acenter) < radius
+    #B = np.logical_or(np.abs(dihedrals[::sub] - np.pi/3) < radius, np.abs(dihedrals[::sub] + np.pi/3) < radius)
     A = np.abs(dihedrals[::sub] - Acenter) < radius
     B = np.abs(dihedrals[::sub] - Bcenter) < radius
-
     C = np.ones(num_samples, dtype=bool)
     C[A] = False
     C[B] = False
 
     # Run diffusion map
-    epsilon  = optimal_eps
+    #epsilon  = optimal_eps
+    epsilon = 0.009
 
     [_, L] = create_laplacian(new_data, target_measure, epsilon)
     q = solve_committor(L, B, C, num_samples)
+    plt.figure()
     plt.scatter(dihedrals_shift[::sub], q, s=0.1)
     plt.show()
     return None
@@ -150,7 +151,8 @@ def Ksum_test(eps_vals, data, target_measure):
         K = sqdists.copy()
         K.data = np.exp(-K.data / (2*epsilon))
         print(f"Data type of kernel: {type(K)}")
-        K = K.minimum(K.T) # symmetrize kernel
+        #K = K.minimum(K.T) # symmetrize kernel
+        K = 0.5*(K + K.T)
 
         # Check sparsity of kernel
         num_entries = K.shape[0]**2
@@ -163,6 +165,7 @@ def Ksum_test(eps_vals, data, target_measure):
         u = (target_measure**(0.5)) / kde
         U = sps.spdiags(u, 0, num_samples, num_samples) 
         W = U @ K @ U
+        #W = K
         Ksum[i] = W.sum(axis=None)
 
         # Compute deriv of log Ksum w.r.t log epsilon ('chi log')
