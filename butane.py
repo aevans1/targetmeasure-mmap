@@ -59,7 +59,7 @@ def main():
 
 
     # Define A,B sets, based on [0, pi] shifted dihedrals
-    radius = 0.2
+    radius = 0.1
     Acenter = np.pi
     Bcenter = np.pi/3
 
@@ -73,9 +73,9 @@ def main():
     # Run diffusion map
     epsilon  = optimal_eps
 
-    [_, L, nonisolated] = create_laplacian(new_data, target_measure, epsilon)
-    q = solve_committor(L, B, C, nonisolated, num_samples)
-    plt.scatter(dihedrals_shift[::sub], q)
+    [_, L] = create_laplacian(new_data, target_measure, epsilon)
+    q = solve_committor(L, B, C, num_samples)
+    plt.scatter(dihedrals_shift[::sub], q, s=0.1)
     plt.show()
     return None
 
@@ -85,24 +85,16 @@ def create_laplacian(data, target_measure, epsilon):
     num_samples = data.shape[0]
 
     ### Create distance matrix
-    eps_radius = np.sqrt(epsilon)
-    neigh = NearestNeighbors(radius = eps_radius)
+    neigh = NearestNeighbors(n_neighbors=512, metric='sqeuclidean')
     neigh.fit(data)
-    sqdists = neigh.radius_neighbors_graph(data, mode="distance") 
+    sqdists = neigh.kneighbors_graph(data, mode="distance") 
     print(f"Data type of squared distance matrix: {type(sqdists)}")
 
-    # Find isolated points
-    isolated = np.asarray(sqdists.sum(axis=1)).squeeze() == 0
-    nonisolated = ~isolated
-
     ### Create Kernel
-    # Kernel should only look at nonisolated points
-    K = sqdists.copy()[nonisolated, :]
-    K = K[:, nonisolated]
-    num_nodes = K.shape[0]
-
-    K.data = np.exp(-K.data**2 / (2*epsilon))
+    K = sqdists.copy()
+    K.data = np.exp(-K.data / (2*epsilon))
     print(f"Data type of kernel: {type(K)}")
+    K = K.minimum(K.T) # symmetrize kernel
 
     # Check sparsity of kernel
     num_entries = K.shape[0]**2
@@ -111,31 +103,27 @@ def create_laplacian(data, target_measure, epsilon):
 
     ### Create Graph Laplacian
     kde = np.asarray(K.sum(axis=1)).squeeze()
-    #kde *=  (1.0/num_nodes)*(2*np.pi*epsilon)**(-num_features/2) 
-    u = (target_measure[nonisolated]**(0.5)) / kde
-    U = sps.spdiags(u, 0, num_nodes, num_nodes) 
+    #kde *=  (1.0/num_samples)*(2*np.pi*epsilon)**(-num_features/2) 
+    u = (target_measure**(0.5)) / kde
+    U = sps.spdiags(u, 0, num_samples, num_samples) 
     W = U @ K @ U
     stationary = np.asarray(W.sum(axis=1)).squeeze()
-    P = sps.spdiags(1.0/stationary, 0, num_nodes, num_nodes) @ W 
-    L = (P - sps.eye(num_nodes, num_nodes))/epsilon
+    P = sps.spdiags(1.0/stationary, 0, num_samples, num_samples) @ W 
+    L = (P - sps.eye(num_samples, num_samples))/epsilon
 
-    return [K, L, nonisolated]
+    return [K, L]
 
-def solve_committor(L, B, C, nonisolated, num_samples):
-
-    B_nonisolated = B[nonisolated]
-    C_nonisolated = C[nonisolated]
+def solve_committor(L, B, C, num_samples):
 
     ### Solve Committor
-    Lcb = L[C_nonisolated, :]
-    Lcb = Lcb[:, B_nonisolated]
-    Lcc = L[C_nonisolated, :]
-    Lcc = Lcc[:, C_nonisolated]
+    Lcb = L[C, :]
+    Lcb = Lcb[:, B]
+    Lcc = L[C, :]
+    Lcc = Lcc[:, C]
     q = np.zeros(num_samples)
     q[B] = 1
     row_sum = np.asarray(Lcb.sum(axis=1)).squeeze()
-    q[np.logical_and(C,nonisolated)] = sps.linalg.spsolve(Lcc, -row_sum)
-    q[~nonisolated] = np.nan
+    q[C] = sps.linalg.spsolve(Lcc, -row_sum)
     return q
 
 def Ksum_test(eps_vals, data, target_measure):
@@ -148,42 +136,32 @@ def Ksum_test(eps_vals, data, target_measure):
         # Construct sparsified sqdists, kernel and generator with radius nearest neighbors 
         epsilon = eps_vals[i]
         print(f"doing epsilon {i}")
-        radius = None
-
-        # put a maximum for the radius in radius-nearest neighbors
-        if epsilon > 0.5:
-            eps_radius = (3*np.sqrt(0.5))**(0.5)
-        
+       
         num_features = data.shape[1]
         num_samples = data.shape[0]
-
+        
         ### Create distance matrix
-        eps_radius = np.sqrt(epsilon)
-        neigh = NearestNeighbors(radius = eps_radius)
+        neigh = NearestNeighbors(n_neighbors=512, metric='sqeuclidean')
         neigh.fit(data)
-        sqdists = neigh.radius_neighbors_graph(data, mode="distance") 
-    
-        # Find isolated points, adjust distance matrix for nonisolated points
-        isolated = np.asarray(sqdists.sum(axis=1)).squeeze() == 0
-        nonisolated = ~isolated
-        sqdists = sqdists[nonisolated, :]
-        sqdists = sqdists[:, nonisolated] 
+        sqdists = neigh.kneighbors_graph(data, mode="distance") 
+        print(f"Data type of squared distance matrix: {type(sqdists)}")
 
         ### Create Kernel
-        # Kernel should only look at nonisolated points
         K = sqdists.copy()
-        K.data = np.exp(-K.data**2 / (2*epsilon))
-        num_nodes = K.shape[0]
-        
+        K.data = np.exp(-K.data / (2*epsilon))
+        print(f"Data type of kernel: {type(K)}")
+        K = K.minimum(K.T) # symmetrize kernel
+
+        # Check sparsity of kernel
         num_entries = K.shape[0]**2
         nonzeros_ratio = K.nnz / (num_entries)
         print(f"Ratio of nonzeros to zeros in kernel matrix: {nonzeros_ratio}")
 
-        ### Create target measure symmetric kernel
+        ### Create Graph Laplacian
         kde = np.asarray(K.sum(axis=1)).squeeze()
         kde *=  (1.0/num_samples)*(2*np.pi*epsilon)**(-num_features/2) 
-        u = (target_measure[nonisolated]**(0.5)) / kde
-        U = sps.spdiags(u, 0, num_nodes, num_nodes) 
+        u = (target_measure**(0.5)) / kde
+        U = sps.spdiags(u, 0, num_samples, num_samples) 
         W = U @ K @ U
         Ksum[i] = W.sum(axis=None)
 
@@ -195,10 +173,6 @@ def Ksum_test(eps_vals, data, target_measure):
         print("\n") 
         optimal_eps = eps_vals[np.nanargmax(chi_log_analytical)]
     return [Ksum, chi_log_analytical, optimal_eps]
-
-
-
-
 
 if __name__ == '__main__':
     main()
