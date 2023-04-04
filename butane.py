@@ -37,9 +37,9 @@ def main():
     num_features = new_data.shape[1]
     num_samples = new_data.shape[0]
 
-    #eps_vals = 2.0**np.arange(-12, -4, 1)
+    #eps_vals = 2.0**np.arange(-20, 0, 1)
     #[Ksum, chi_log_analytical, optimal_eps] = Ksum_test(eps_vals, new_data, target_measure)
-    #print(f"optimal_eps = {optimal_eps}")
+    ##print(f"optimal_eps = {optimal_eps}")
 
     #plt.figure()
     #plt.plot(eps_vals, Ksum)
@@ -58,25 +58,24 @@ def main():
 
 
     # Define A,B sets, based on [0, pi] shifted dihedrals
-    radius = 0.2
+    radius = 0.3
     Acenter = -np.pi/3
-    Bcenter = np.pi/3
-    #A = np.abs(dihedrals_shift[::sub] - Acenter) < radius
-    #B = np.logical_or(np.abs(dihedrals[::sub] - np.pi/3) < radius, np.abs(dihedrals[::sub] + np.pi/3) < radius)
+    #Bcenter = np.pi/3
+    B = np.logical_or(np.abs(dihedrals[::sub] - np.pi) < radius, np.abs(dihedrals[::sub] + np.pi) < radius)
     A = np.abs(dihedrals[::sub] - Acenter) < radius
-    B = np.abs(dihedrals[::sub] - Bcenter) < radius
+    #B = np.abs(dihedrals[::sub] - Bcenter) < radius
     C = np.ones(num_samples, dtype=bool)
     C[A] = False
     C[B] = False
 
     # Run diffusion map
     #epsilon  = optimal_eps
-    epsilon = 0.009
+    epsilon = 0.00097
 
     [_, L] = create_laplacian(new_data, target_measure, epsilon)
     q = solve_committor(L, B, C, num_samples)
     plt.figure()
-    plt.scatter(dihedrals_shift[::sub], q, s=0.1)
+    plt.scatter(dihedrals[::sub], q, s=0.1)
     plt.show()
     return None
 
@@ -103,13 +102,14 @@ def create_laplacian(data, target_measure, epsilon):
     print(f"Ratio of nonzeros to zeros in kernel matrix: {nonzeros_ratio}")
 
     ### Create Graph Laplacian
-    kde = np.asarray(K.sum(axis=1)).squeeze()
+    kde = np.asarray(K.sum(axis=1)).ravel()
     #kde *=  (1.0/num_samples)*(2*np.pi*epsilon)**(-num_features/2) 
     u = (target_measure**(0.5)) / kde
     U = sps.spdiags(u, 0, num_samples, num_samples) 
     W = U @ K @ U
-    stationary = np.asarray(W.sum(axis=1)).squeeze()
-    P = sps.spdiags(1.0/stationary, 0, num_samples, num_samples) @ W 
+    stationary = np.asarray(W.sum(axis=1)).ravel()
+    inv_stationary = np.power(stationary, -1)
+    P = sps.spdiags(inv_stationary, 0, num_samples, num_samples) @ W 
     L = (P - sps.eye(num_samples, num_samples))/epsilon
 
     return [K, L]
@@ -123,7 +123,7 @@ def solve_committor(L, B, C, num_samples):
     Lcc = Lcc[:, C]
     q = np.zeros(num_samples)
     q[B] = 1
-    row_sum = np.asarray(Lcb.sum(axis=1)).squeeze()
+    row_sum = np.asarray(Lcb.sum(axis=1)).ravel()
     q[C] = sps.linalg.spsolve(Lcc, -row_sum)
     return q
 
@@ -151,8 +151,7 @@ def Ksum_test(eps_vals, data, target_measure):
         K = sqdists.copy()
         K.data = np.exp(-K.data / (2*epsilon))
         print(f"Data type of kernel: {type(K)}")
-        #K = K.minimum(K.T) # symmetrize kernel
-        K = 0.5*(K + K.T)
+        K = K.minimum(K.T) # symmetrize kernel
 
         # Check sparsity of kernel
         num_entries = K.shape[0]**2
@@ -165,7 +164,6 @@ def Ksum_test(eps_vals, data, target_measure):
         u = (target_measure**(0.5)) / kde
         U = sps.spdiags(u, 0, num_samples, num_samples) 
         W = U @ K @ U
-        #W = K
         Ksum[i] = W.sum(axis=None)
 
         # Compute deriv of log Ksum w.r.t log epsilon ('chi log')
