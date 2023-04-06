@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 def main():
 
     # Load data
-    fname = "systems/butane/data/butane_metad.npz"
+    fname = "systems/butane/data/butane_metad_alt.npz"
     inData = np.load(fname)
     print("Keys in data:")
     print(list(inData.keys()))
@@ -31,50 +31,50 @@ def main():
     target_measure = np.exp(-potential/(kbT_roomtemp))
 
     # Subsample dataset
-    sub = 5
-    new_data = data[::sub, :]
-    target_measure = np.exp(-potential[::sub]/(kbT_roomtemp))
+    sub = 10
+    new_data = data[-10000:, :]
+    target_measure = np.exp(-potential[-10000:]/(kbT_roomtemp))
     num_features = new_data.shape[1]
     num_samples = new_data.shape[0]
 
-    eps_vals = 2.0**np.arange(-20, 0, 1)
-    [Ksum, chi_log_analytical, optimal_eps, effective_dim] = Ksum_test_unweighted(eps_vals, new_data)
-    print(f"optimal_eps = {optimal_eps}")
+    #eps_vals = 2.0**np.arange(-20, 0, 1)
+    #[Ksum, chi_log_analytical, optimal_eps, effective_dim] = Ksum_test_unweighted(eps_vals, new_data)
+    #print(f"optimal_eps = {optimal_eps}")
 
-    plt.figure()
-    plt.plot(eps_vals, Ksum)
-    plt.xscale("log", base=10)
-    plt.yscale("log", base=10)
-    plt.axvline(x=optimal_eps, ls='--')
+    #plt.figure()
+    #plt.plot(eps_vals, Ksum)
+    #plt.xscale("log", base=10)
+    #plt.yscale("log", base=10)
+    #plt.axvline(x=optimal_eps, ls='--')
 
-    plt.figure()
-    plt.plot(eps_vals, chi_log_analytical)
-    plt.title("log Ksums")
-    plt.xscale("log", base=10)
-    plt.yscale("log", base=10)
-    plt.title("dlog_Sum/dlog_eps")
-    plt.axvline(x=optimal_eps, ls='--')
-    #plt.savefig(fname, dpi=300)
+    #plt.figure()
+    #plt.plot(eps_vals, chi_log_analytical)
+    #plt.title("log Ksums")
+    #plt.xscale("log", base=10)
+    #plt.yscale("log", base=10)
+    #plt.title("dlog_Sum/dlog_eps")
+    #plt.axvline(x=optimal_eps, ls='--')
+    ##plt.savefig(fname, dpi=300)
 
     # Define A,B sets, based on [0, pi] shifted dihedrals
-    radius = 0.1
+    radius = 0.3
     Acenter = -np.pi/3
     #Bcenter = np.pi/3
-    B = np.logical_or(np.abs(dihedrals[::sub] - np.pi) < radius, np.abs(dihedrals[::sub] + np.pi) < radius)
-    A = np.abs(dihedrals[::sub] - Acenter) < radius
-    #B = np.abs(dihedrals[::sub] - Bcenter) < radius
+    B = np.logical_or(np.abs(dihedrals[-10000:] - np.pi) < radius, np.abs(dihedrals[-10000:] + np.pi) < radius)
+    A = np.abs(dihedrals[-10000:] - Acenter) < radius
+    #B = np.abs(dihedrals[-10000:] - Bcenter) < radius
     C = np.ones(num_samples, dtype=bool)
     C[A] = False
     C[B] = False
 
     # Run diffusion map
-    epsilon  = optimal_eps
-    #epsilon = 0.00097
+    #epsilon  = optimal_eps
+    epsilon = 8E-5
 
     [_, L] = create_laplacian(new_data, target_measure, epsilon)
     q = solve_committor(L, B, C, num_samples)
     plt.figure()
-    plt.scatter(dihedrals[::sub], q, s=0.1)
+    plt.scatter(dihedrals[-10000:], q, s=0.1)
     plt.show()
     return None
 
