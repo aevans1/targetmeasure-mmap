@@ -69,7 +69,7 @@ def main():
 
     # Run diffusion map
     #epsilon  = optimal_eps
-    epsilon = 8E-5
+    epsilon = 8E-4
 
     [_, L] = create_laplacian(new_data, target_measure, epsilon)
     q = solve_committor(L, B, C, num_samples)
