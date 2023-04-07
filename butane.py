@@ -4,6 +4,7 @@ import scipy.spatial
 import scipy.linalg.lapack as lapack
 from sklearn.neighbors import NearestNeighbors
 import matplotlib.pyplot as plt
+from scipy.linalg.lapack import dpstrf
 
 def main():
 
@@ -32,12 +33,14 @@ def main():
     target_measure = np.exp(-potential/(kbT_roomtemp))
 
     # Subsample dataset
-    sub = 20
-    new_data = data[::sub, :]
-    target_measure = np.exp(-potential[::sub]/(kbT_roomtemp))
-    num_features = new_data.shape[1]
+    indices = np.arange(data.shape[0])
+    sub_indices = indices[100000::10]
+    
+    new_data = data[sub_indices, :]
+    target_measure = np.exp(-potential[sub_indices]/(kbT_roomtemp))
     num_samples = new_data.shape[0]
-
+    num_features = new_data.shape[1]
+    print(f"number of samples for subsampled data:{num_samples}") 
     #eps_vals = 2.0**np.arange(-20, 0, 1)
     #[Ksum, chi_log_analytical, optimal_eps, effective_dim] = Ksum_test_unweighted(eps_vals, new_data)
     #print(f"optimal_eps = {optimal_eps}")
@@ -60,22 +63,25 @@ def main():
     # Define A,B sets, based on [0, pi] shifted dihedrals
     radius = 0.1
     Acenter = -np.pi/3
-    Bcenter = np.pi/3
-    #B = np.logical_or(np.abs(dihedrals[::sub] - np.pi) < radius, np.abs(dihedrals[::sub] + np.pi) < radius)
-    A = np.abs(dihedrals[::sub] - Acenter) < radius
-    B = np.abs(dihedrals[::sub] - Bcenter) < radius
+    #Bcenter = np.pi/3
+    B = np.logical_or(np.abs(dihedrals[sub_indices] - np.pi) < radius, np.abs(dihedrals[sub_indices] + np.pi) < radius)
+    A = np.abs(dihedrals[sub_indices] - Acenter) < radius
+    #B = np.abs(dihedrals[sub_indices] - Bcenter) < radius
+    print(f"samples in A:{new_data[A, :].shape[0]}")
+    print(f"samples in B:{new_data[B, :].shape[0]}")
     C = np.ones(num_samples, dtype=bool)
     C[A] = False
     C[B] = False
 
     # Run diffusion map
-    #epsilon  = optimal_eps
-    epsilon = 9E-4
+    epsilon  = 0.004
+
+    
 
     [_, L] = create_laplacian(new_data, target_measure, epsilon)
     q = solve_committor(L, B, C, num_samples)
     plt.figure()
-    plt.scatter(dihedrals[::sub], q, s=0.1)
+    plt.scatter(dihedrals[sub_indices], q, s=0.1)
     plt.show()
     return None
 
@@ -85,7 +91,7 @@ def create_laplacian(data, target_measure, epsilon):
     num_samples = data.shape[0]
 
     ### Create distance matrix
-    neigh = NearestNeighbors(n_neighbors=1028, metric='sqeuclidean')
+    neigh = NearestNeighbors(n_neighbors=64, metric='sqeuclidean')
     neigh.fit(data)
     sqdists = neigh.kneighbors_graph(data, mode="distance") 
     print(f"Data type of squared distance matrix: {type(sqdists)}")
@@ -94,8 +100,9 @@ def create_laplacian(data, target_measure, epsilon):
     K = sqdists.copy()
     K.data = np.exp(-K.data / (2*epsilon))
     print(f"Data type of kernel: {type(K)}")
-    K = K.minimum(K.T) # symmetrize kernel
-
+    #K = K.minimum(K.T) # symmetrize kernel
+    K = 0.5*(K + K.T)
+    
     # Check sparsity of kernel
     num_entries = K.shape[0]**2
     nonzeros_ratio = K.nnz / (num_entries)
@@ -113,6 +120,32 @@ def create_laplacian(data, target_measure, epsilon):
     L = (P - sps.eye(num_samples, num_samples))/epsilon
 
     return [K, L]
+
+def find_pivots(data, epsilon):
+
+    ### Create distance matrix
+    neigh = NearestNeighbors(n_neighbors=512, metric='sqeuclidean')
+    neigh.fit(data)
+    sqdists = neigh.kneighbors_graph(data, mode="distance") 
+    print(f"Data type of squared distance matrix: {type(sqdists)}")
+
+    ### Create Kernel
+    K = sqdists.copy()
+    K.data = np.exp(-K.data / (2*epsilon))
+    print(f"Data type of kernel: {type(K)}")
+    #K = K.minimum(K.T) # symmetrize kernel
+    K = 0.5*(K + K.T).toarray()
+    #lu = sps.linalg.splu(K)
+    #piv = lu.perm_r
+    _, piv, _, _ = dpstrf(K)
+
+    #print("Shifting indices to start at 0 because this function is from fortran and starts at 1!")
+    #piv = piv -1
+
+    return piv
+
+
+
 
 def solve_committor(L, B, C, num_samples):
 
