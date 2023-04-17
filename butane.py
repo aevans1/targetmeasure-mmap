@@ -9,7 +9,7 @@ from scipy.linalg.lapack import dpstrf
 def main():
 
     # Load data
-    fname = "systems/butane/data/butane_metad_alt.npz"
+    fname = "systems/butane/data/butane_metad.npz"
     inData = np.load(fname)
     print("Keys in data:")
     print(list(inData.keys()))
@@ -34,7 +34,7 @@ def main():
 
     # Subsample dataset
     indices = np.arange(data.shape[0])
-    sub_indices = indices[100000::10]
+    sub_indices = indices[::10]
     
     new_data = data[sub_indices, :]
     target_measure = np.exp(-potential[sub_indices]/(kbT_roomtemp))
@@ -88,7 +88,7 @@ def main():
         C[B] = False
 
         # Run diffusion map
-        epsilon  = 0.0005
+        epsilon  = optimal_eps
 
         [_, L] = create_laplacian(new_data, target_measure, epsilon)
         q = solve_committor(L, B, C, num_samples)
@@ -149,8 +149,8 @@ def find_pivots(data, epsilon):
     K = sqdists.copy()
     K.data = np.exp(-K.data / (2*epsilon))
     print(f"Data type of kernel: {type(K)}")
-    #K = K.minimum(K.T) # symmetrize kernel
-    K = 0.5*(K + K.T).toarray()
+    K = K.minimum(K.T) # symmetrize kernel
+    
     #lu = sps.linalg.splu(K)
     #piv = lu.perm_r
     _, piv, _, _ = dpstrf(K)
