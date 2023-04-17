@@ -41,47 +41,65 @@ def main():
     num_samples = new_data.shape[0]
     num_features = new_data.shape[1]
     print(f"number of samples for subsampled data:{num_samples}") 
-    #eps_vals = 2.0**np.arange(-20, 0, 1)
-    #[Ksum, chi_log_analytical, optimal_eps, effective_dim] = Ksum_test_unweighted(eps_vals, new_data)
-    #print(f"optimal_eps = {optimal_eps}")
-    #plt.figure()
-    #plt.plot(eps_vals, Ksum)
-    #plt.xscale("log", base=10)
-    #plt.yscale("log", base=10)
-    #plt.axvline(x=optimal_eps, ls='--')
+    eps_vals = 2.0**np.arange(-20, 0, 1)
+    [Ksum, chi_log_analytical, optimal_eps, effective_dim] = Ksum_test_unweighted(eps_vals, new_data)
+    print(f"optimal_eps = {optimal_eps}")
+    plt.figure()
+    plt.plot(eps_vals, Ksum)
+    plt.xscale("log", base=10)
+    plt.yscale("log", base=10)
+    plt.axvline(x=optimal_eps, ls='--')
 
-    #plt.figure()
-    #plt.plot(eps_vals, chi_log_analytical)
-    #plt.title("log Ksums")
-    #plt.xscale("log", base=10)
-    #plt.yscale("log", base=10)
-    #plt.title("dlog_Sum/dlog_eps")
-    #plt.axvline(x=optimal_eps, ls='--')
+    plt.figure()
+    plt.plot(eps_vals, chi_log_analytical)
+    plt.title("log Ksums")
+    plt.xscale("log", base=10)
+    plt.yscale("log", base=10)
+    plt.title("dlog_Sum/dlog_eps")
+    plt.axvline(x=optimal_eps, ls='--')
     #plt.savefig(fname, dpi=300)
 
-    # Define A,B sets, based on [0, pi] shifted dihedrals
     radius = 0.1
-    Acenter = -np.pi/3
-    #Bcenter = np.pi/3
-    B = np.logical_or(np.abs(dihedrals[sub_indices] - np.pi) < radius, np.abs(dihedrals[sub_indices] + np.pi) < radius)
-    A = np.abs(dihedrals[sub_indices] - Acenter) < radius
-    #B = np.abs(dihedrals[sub_indices] - Bcenter) < radius
-    print(f"samples in A:{new_data[A, :].shape[0]}")
-    print(f"samples in B:{new_data[B, :].shape[0]}")
-    C = np.ones(num_samples, dtype=bool)
-    C[A] = False
-    C[B] = False
 
-    # Run diffusion map
-    epsilon  = 0.004
-
+    for i in range(4):
+        OPTION = i
     
+        if OPTION == 0: 
+            Acenter = -np.pi/3
+            A = np.abs(dihedrals[sub_indices] - Acenter) < radius
+            B = np.logical_or(np.abs(dihedrals[sub_indices] - np.pi) < radius, np.abs(dihedrals[sub_indices] + np.pi) < radius)
+        elif OPTION == 1:
+            Acenter = -np.pi/3
+            Bcenter = np.pi/3
+            A = np.abs(dihedrals[sub_indices] - Acenter) < radius
+            B = np.abs(dihedrals[sub_indices] - Bcenter) < radius
+        elif OPTION == 2:
+            Acenter = -np.pi/3
+            A = np.abs(dihedrals[sub_indices] - Acenter) < radius
+            B = np.logical_or(np.abs(dihedrals[sub_indices] - (2/3)*np.pi) < np.pi/3 + radius , np.abs(dihedrals[sub_indices] + np.pi) < radius)
+        elif OPTION == 3:
+            A = np.abs(dihedrals[sub_indices]) < np.pi/3 + radius
+            B = np.logical_or(np.abs(dihedrals[sub_indices] - np.pi) < radius, np.abs(dihedrals[sub_indices] + np.pi) < radius)
+    
+        print(f"samples in A:{new_data[A, :].shape[0]}")
+        print(f"samples in B:{new_data[B, :].shape[0]}")
+        C = np.ones(num_samples, dtype=bool)
+        C[A] = False
+        C[B] = False
 
-    [_, L] = create_laplacian(new_data, target_measure, epsilon)
-    q = solve_committor(L, B, C, num_samples)
-    plt.figure()
-    plt.scatter(dihedrals[sub_indices], q, s=0.1)
-    plt.show()
+        # Run diffusion map
+        epsilon  = 0.0005
+
+        [_, L] = create_laplacian(new_data, target_measure, epsilon)
+        q = solve_committor(L, B, C, num_samples)
+        plt.figure()
+        plt.xlabel("dihedral")
+        plt.ylabel("committor")
+        plt.scatter(dihedrals[sub_indices], q, s=0.1)
+        #plt.plot(inData['free_energy'])
+        #print(inData['free_energy'])
+        plt.title(f"option={OPTION}")
+    plt.show() 
     return None
 
 def create_laplacian(data, target_measure, epsilon):
@@ -99,8 +117,7 @@ def create_laplacian(data, target_measure, epsilon):
     K = sqdists.copy()
     K.data = np.exp(-K.data / (2*epsilon))
     print(f"Data type of kernel: {type(K)}")
-    #K = K.minimum(K.T) # symmetrize kernel
-    K = 0.5*(K + K.T)
+    K = K.minimum(K.T) # symmetrize kernel
     
     # Check sparsity of kernel
     num_entries = K.shape[0]**2
@@ -175,15 +192,14 @@ def Ksum_test_unweighted(eps_vals, data):
         num_samples = data.shape[0]
         
         ### Create distance matrix
-        neigh = NearestNeighbors(n_neighbors=512, metric='sqeuclidean')
+        neigh = NearestNeighbors(n_neighbors=64, metric='sqeuclidean')
         neigh.fit(data)
         sqdists = neigh.kneighbors_graph(data, mode="distance") 
 
         ### Create Kernel
         K = sqdists.copy()
         K.data = np.exp(-K.data / (2*epsilon))
-        #K = K.minimum(K.T) # symmetrize kernel
-        K = 0.5*(K + K.T) # symmetrize kernel
+        K = K.minimum(K.T) # symmetrize kernel
 
         ### Create Graph Laplacian
         Ksum[i] = K.sum(axis=None)
