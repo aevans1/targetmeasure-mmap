@@ -9,7 +9,7 @@ from scipy.linalg.lapack import dpstrf
 def main():
 
     # Load data
-    fname = "systems/butane/data/butane_metad.npz"
+    fname = "systems/butane/data/butane_metad_alt.npz"
     inData = np.load(fname)
     print("Keys in data:")
     print(list(inData.keys()))
@@ -44,7 +44,6 @@ def main():
     #eps_vals = 2.0**np.arange(-20, 0, 1)
     #[Ksum, chi_log_analytical, optimal_eps, effective_dim] = Ksum_test_unweighted(eps_vals, new_data)
     #print(f"optimal_eps = {optimal_eps}")
-
     #plt.figure()
     #plt.plot(eps_vals, Ksum)
     #plt.xscale("log", base=10)
