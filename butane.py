@@ -86,7 +86,7 @@ def main():
 
     radius = 0.1
 
-    OPTION = 2
+    OPTION = 1
     
     if OPTION == 0: 
         Acenter = -np.pi/3
@@ -120,15 +120,15 @@ def main():
     #epsilon  = optimal_eps
     epsilon = 0.01
 
-    [_, L] = create_laplacian(new_data, target_measure, eps_kde=epsilon, epsilon=epsilon)
-    q = solve_committor(L, B, C, num_samples)
+    [stationary, _, L] = create_laplacian_sparse(new_data, target_measure, epsilon=epsilon, n_neighbors=64)
+    q = solve_committor_sparse(L, B, C, num_samples)
     plt.figure()
     plt.xlabel("dihedral")
     plt.ylabel("committor")
     plt.scatter(dihedrals[sub_indices], q, s=0.1)
     plt.title(f"committor, option={OPTION}, eps={epsilon}")
 
-    eigvecs, _ = compute_spectrum(L, epsilon, num_eigvecs=4)
+    eigvecs, _ = compute_spectrum_sparse(L, stationary, num_eigvecs=4)
     plt.figure()
     plt.xlabel("dihedral")
     plt.ylabel("eigvec 1")
@@ -151,22 +151,20 @@ def main():
     plt.show() 
     return None
 
-def create_laplacian(data, target_measure, eps_kde, epsilon):
+def create_laplacian_sparse(data, target_measure, epsilon, n_neighbors):
 
     num_features = data.shape[1]
     num_samples = data.shape[0]
 
-    print(epsilon)
     ### Create distance matrix
-    neigh = NearestNeighbors(n_neighbors=64, metric='sqeuclidean')
+    neigh = NearestNeighbors(n_neighbors=n_neighbors, metric='sqeuclidean')
     neigh.fit(data)
     sqdists = neigh.kneighbors_graph(data, mode="distance") 
     print(f"Data type of squared distance matrix: {type(sqdists)}")
 
     ### Create Kernel
     K = sqdists.copy()
-    K.data = np.exp(-K.data / (2*eps_kde))
-    print(f"Data type of kernel: {type(K)}")
+    K.data = np.exp(-K.data / (2*epsilon))
     K = 0.5*(K + K.T)
  
     kde = np.asarray(K.sum(axis=1)).ravel()
@@ -178,11 +176,6 @@ def create_laplacian(data, target_measure, eps_kde, epsilon):
     print(f"Ratio of nonzeros to zeros in kernel matrix: {nonzeros_ratio}")
 
     ### Create Graph Laplacian
-    K = sqdists.copy()
-    K.data = np.exp(-K.data / (2*epsilon))
-    print(f"Data type of kernel: {type(K)}")
-    K = 0.5*(K + K.T)
- 
     u = (target_measure**(0.5)) / kde
     U = sps.spdiags(u, 0, num_samples, num_samples) 
     W = U @ K @ U
@@ -191,15 +184,13 @@ def create_laplacian(data, target_measure, eps_kde, epsilon):
     P = sps.spdiags(inv_stationary, 0, num_samples, num_samples) @ W 
     L = (P - sps.eye(num_samples, num_samples))/epsilon
 
-    return [K, L]
+    return [stationary, K, L]
 
-def solve_committor(L, B, C, num_samples):
+def solve_committor_sparse(L, B, C, num_samples):
 
     ### Solve Committor
-    Lcb = L[C, :]
-    Lcb = Lcb[:, B]
-    Lcc = L[C, :]
-    Lcc = Lcc[:, C]
+    Lcb = L[C, :][:, B]
+    Lcc = L[C, :][:, C]
 
     q = np.zeros(num_samples)
     q[B] = 1
@@ -207,53 +198,11 @@ def solve_committor(L, B, C, num_samples):
     q[C] = sps.linalg.spsolve(Lcc, -row_sum)
     return q
 
-def create_laplacian_dense(data, target_measure, epsilon):
-
-    num_features = data.shape[1]
-    num_samples = data.shape[0]
-
-    print(epsilon)
-    ### Create distance matrix
-    sqdists = cdist(data, data, 'sqeuclidean') 
-
-    ### Create Kernel
-    K = np.exp(-sqdists / (2*epsilon))
-    
-
-    ### Create Graph Laplacian
-    kde = K.sum(axis=1)
-    u = (target_measure**(0.5)) / kde
-    U = np.diag(u)
-    W = U @ K @ U
-    stationary = W.sum(axis=1)
-    inv_stationary = np.power(stationary, -1)
-    P = np.diag(inv_stationary) @ W 
-    L = (P - np.eye(num_samples))/epsilon
-
-    return [K, L]
-
-def solve_committor_dense(L, B, C, num_samples):
-
-    ### Solve Committor
-    Lcb = L[C, :]
-    Lcb = Lcb[:, B]
-    Lcc = L[C, :]
-    Lcc = Lcc[:, C]
-
-    q = np.zeros(num_samples)
-    q[B] = 1
-    row_sum = Lcb.sum(axis=1)
-    q[C] = np.linalg.solve(Lcc, -row_sum)
-    return q
-
-
-def compute_spectrum(L, eps, num_eigvecs):
+def compute_spectrum_sparse(L, stationary, num_eigvecs):
     # Symmetrize the generator 
     num_samples = L.shape[0]
-    P = eps*L + sps.eye(num_samples, num_samples)
-    d = np.asarray(P.sum(axis=1)).ravel()
-    Dinv_onehalf =  sps.spdiags(np.power(d,-0.5), 0, num_samples, num_samples)
-    D_onehalf =  sps.spdiags(np.power(d,0.5), 0, num_samples, num_samples)
+    Dinv_onehalf =  sps.spdiags(stationary**(-0.5), 0, num_samples, num_samples)
+    D_onehalf =  sps.spdiags(stationary**(0.5), 0, num_samples, num_samples)
     Lsymm = D_onehalf @ L @ Dinv_onehalf
 
     # Compute eigvals, eigvecs 
@@ -267,6 +216,61 @@ def compute_spectrum(L, eps, num_eigvecs):
     evals = np.real(evals[idx])
     evecs = np.real(evecs[:, idx])
     return evecs, evals
+
+def create_laplacian_dense(data, target_measure, epsilon):
+
+    num_features = data.shape[1]
+    num_samples = data.shape[0]
+
+    ### Create distance matrix
+    sqdists = cdist(data, data, 'sqeuclidean') 
+
+    ### Create Kernel
+    K = np.exp(-sqdists / (2.0*epsilon))
+
+    ### Create Graph Laplacian
+    kde = K.sum(axis=1)
+    u = (target_measure**(0.5)) / kde
+    U = np.diag(u)
+    W = U @ K @ U
+    stationary = W.sum(axis=1)
+    P = np.diag(stationary**(-1)) @ W 
+    L = (P - np.eye(num_samples))/epsilon
+
+    return [stationary, K, L]
+
+def solve_committor_dense(L, B, C, num_samples):
+
+    ### Solve Committor
+    Lcb = L[C, :][:, B]
+    Lcc = L[C, :][:, C]
+
+    q = np.zeros(num_samples)
+    q[B] = 1
+    row_sum = Lcb.sum(axis=1)
+    q[C] = np.linalg.solve(Lcc, -row_sum)
+    return q
+
+def compute_spectrum_dense(L, stationary, num_eigvecs):
+    # Symmetrize the generator 
+    Dinv_onehalf =  np.diags(stationary**(-0.5))
+    D_onehalf =  np.diag(stationary**(0.5))
+    Lsymm = D_onehalf @ L @ Dinv_onehalf
+
+    # Compute eigvals, eigvecs 
+    evals, evecs = sps.linalg.eigsh(Lsymm, k=num_eigvecs, which='SM')
+
+    # Convert back to L^2 norm-1 eigvecs of L 
+    evecs = (Dinv_onehalf) @ evecs
+    evecs /= (np.sum(evecs**2, axis=0))**(0.5)
+    
+    idx = evals.argsort()[::-1][1:]     # Ignore first eigval / eigfunc
+    evals = np.real(evals[idx])
+    evecs = np.real(evecs[:, idx])
+    return evecs, evals
+
+
+
 
 def Ksum_test_unweighted(eps_vals, data):
 
