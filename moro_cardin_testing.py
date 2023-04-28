@@ -7,50 +7,32 @@ import matplotlib.pyplot as plt
 from scipy.linalg.lapack import dpstrf
 from scipy.spatial.distance import cdist
 
+import src.helpers as helpers
+import src.model_systems as model_systems
+
 def main():
 
     # Load data
-    fname = "systems/butane/data/butane_300K.npz"
+    fname = "systems/MoroCardin/data/data_solution_deltanet.npz"
     inData = np.load(fname)
     print("Keys in data:")
     print(list(inData.keys()))
 
     data = inData["data"]
-    #data = inData["data_all_atom"]
     print("Data shape from trajectory:")
     print(data.shape)
-    dihedrals = inData["dihedrals"]
-    potential = inData["potential"]
-    kbT = inData["kbT"]
-    print(f"kbT for data:{kbT}")
-    #kbT_roomtemp = inData["kbT_roomtemp"]
-    kbT_roomtemp = kbT
-
-    print(f"kbT for room temperature:{kbT_roomtemp}")
-
-    # Load up delta net indices
-    #fname = "systems/butane/data/butane_metad_deltanet.npz"
-    #delta_idx = np.load(fname)["delta_idx"]
-    print(data.shape)
-    # Adjust dihedral angles from [0, pi] for convenience
-    dihedrals_shift = dihedrals.copy()
-    dihedrals_shift[dihedrals < 0] = dihedrals_shift[dihedrals < 0] + 2*np.pi 
+    num_samples = data.shape[1]
+    num_features = data.shape[0]
 
     # Define Target Measure
-    target_measure = np.exp(-potential/(kbT_roomtemp))
+       # Setting inverse temperature for plotting
+    beta = 1.0
+    def potential(x): return model_systems.morocardin_potential(x)
+    target_measure = np.zeros(num_samples) 
+    for i in range(num_samples):
+        target_measure[i] = np.exp(-beta*potential(data[:, i]))
     
-    # Subsample dataset
-    indices = np.arange(data.shape[0])
-    sub_indices = indices[::2]
-    #sub_indices = delta_idx
-    
-    new_data = data[sub_indices, :]
-    target_measure = np.exp(-potential[sub_indices]/(kbT_roomtemp))
-    num_samples = new_data.shape[0]
-    num_features = new_data.shape[1]
-    print(f"number of samples for subsampled data:{num_samples}") 
-    #eps_vals = 2.0**np.arange(-20, 0, 1)
-    #[Ksum, chi_log_analytical, eps_kde, effective_dim] = Ksum_test_unweighted(eps_vals, new_data)
+    #[Ksum, chi_log_analytical, eps_kde, effective_dim] = Ksum_test_unweighted(eps_vals, data)
     #print(f"eps_kde = {eps_kde}")
     #plt.figure()
     #plt.plot(eps_vals, Ksum)
@@ -66,7 +48,7 @@ def main():
     #plt.title("dlog_Sum/dlog_eps")
     #plt.axvline(x=eps_kde, ls='--')
     ##plt.savefig(fname, dpi=300)
-    #[Ksum, chi_log_analytical, optimal_eps] = Ksum_test_weighted(eps_vals, eps_kde, new_data, target_measure, d=effective_dim)
+    #[Ksum, chi_log_analytical, optimal_eps] = Ksum_test_weighted(eps_vals, eps_kde, data, target_measure, d=effective_dim)
 
     #print(f"optimal_eps = {optimal_eps}")
     #plt.figure()
@@ -84,110 +66,68 @@ def main():
     #plt.axvline(x=optimal_eps, ls='--')
     ##plt.savefig(fname, dpi=300)
 
-    radius = 0.1
+    # For setting, A,B based on circles
+    center_A = np.array([-1, 0])
+    center_B = np.array([1, -0])
+    radius_A = 0.2
+    radius_B = 0.2
 
-    OPTION = 2
-    
-    if OPTION == 0: 
-        Acenter = -np.pi/3
-        A = np.abs(dihedrals[sub_indices] - Acenter) < radius
-        B = np.logical_or(np.abs(dihedrals[sub_indices] - np.pi) < radius, np.abs(dihedrals[sub_indices] + np.pi) < radius)
-    elif OPTION == 1:
-        Acenter = -np.pi/3
-        Bcenter = np.pi/3
-        A = np.abs(dihedrals[sub_indices] - Acenter) < radius
-        B = np.abs(dihedrals[sub_indices] - Bcenter) < radius
-    elif OPTION == 2:
-        Acenter = -np.pi/3
-        A = np.abs(dihedrals[sub_indices] - Acenter) < radius
-        B = np.logical_or(np.abs(dihedrals[sub_indices] - (2/3)*np.pi) < np.pi/3 + radius , np.abs(dihedrals[sub_indices] + np.pi) < radius)
-    elif OPTION == 3:
-        A = np.abs(dihedrals[sub_indices]) < np.pi/3 + radius
-        B = np.logical_or(np.abs(dihedrals[sub_indices] - np.pi) < radius, np.abs(dihedrals[sub_indices] + np.pi) < radius)
-    
-    elif OPTION == 4:
-        A = np.logical_or(np.abs(dihedrals[sub_indices] - np.pi/3) < radius,np.abs(dihedrals[sub_indices] + np.pi/3) < radius)
-        B = np.logical_or(np.abs(dihedrals[sub_indices] - np.pi) < radius, np.abs(dihedrals[sub_indices] + np.pi) < radius)
-    
-
-    print(f"samples in A:{new_data[A, :].shape[0]}")
-    print(f"samples in B:{new_data[B, :].shape[0]}")
-    C = np.ones(num_samples, dtype=bool)
-    C[A] = False
-    C[B] = False
+    dist_A = np.sqrt(np.sum((center_A[..., np.newaxis] - data)**2, axis=0))
+    dist_B = np.sqrt(np.sum((center_B[..., np.newaxis] - data)**2, axis=0))
+    A = dist_A < radius_A
+    B = dist_B < radius_B 
+    C = ~np.logical_or(A, B)
 
     # Run diffusion map
     #epsilon  = optimal_eps
     epsilon = 0.01
 
-    [_, L] = create_laplacian(new_data, target_measure, eps_kde=epsilon, epsilon=epsilon)
+    [_, L] = create_laplacian(data, target_measure, epsilon=epsilon)
     q = solve_committor(L, B, C, num_samples)
     plt.figure()
-    plt.xlabel("dihedral")
+    plt.xlabel("x_1")
+    plt.ylabel("x_2")
     plt.ylabel("committor")
-    plt.scatter(dihedrals[sub_indices], q, s=0.1)
-    plt.title(f"committor, option={OPTION}, eps={epsilon}")
+    plt.scatter(data[0, :], data[1, :], c=q)
 
-    eigvecs, _ = compute_spectrum(L, epsilon, num_eigvecs=4)
-    plt.figure()
-    plt.xlabel("dihedral")
-    plt.ylabel("eigvec 1")
-    plt.scatter(dihedrals[sub_indices], eigvecs[:, 0], s=0.1)
-    plt.title(f"eigvec1")
-
-    plt.figure()
-    plt.xlabel("dihedral")
-    plt.ylabel("eigvec 2")
-    plt.scatter(dihedrals[sub_indices], eigvecs[:, 1], s=0.1)
-    plt.title(f"eigvec2")
-
-    plt.figure()
-    plt.xlabel("dihedral")
-    plt.ylabel("eigvec 3")
-    plt.scatter(dihedrals[sub_indices], eigvecs[:, 2], s=0.1)
-    plt.title(f"eigvec3")
+    #eigvecs, _ = compute_spectrum(L, epsilon, num_eigvecs=4)
+    #plt.figure()
+    #plt.scatter(data[0, :], data[1, :], c=eigvecs[:, 0])
+    #plt.title(f"eigvec1")
+    #plt.figure()
+    #plt.scatter(data[0, :], data[1, :], c=eigvecs[:, 1])
+    #plt.title(f"eigvec2")
+    #plt.figure()
+    #plt.scatter(data[0, :], data[1, :], c=eigvecs[:, 2])
+    #plt.title(f"eigvec3")
 
 
     plt.show() 
     return None
 
-def create_laplacian(data, target_measure, eps_kde, epsilon):
+def create_laplacian(data, target_measure, epsilon):
 
-    num_features = data.shape[1]
-    num_samples = data.shape[0]
+    num_features = data.shape[0]
+    num_samples = data.shape[1]
 
-    print(epsilon)
     ### Create distance matrix
-    neigh = NearestNeighbors(n_neighbors=64, metric='sqeuclidean')
-    neigh.fit(data)
-    sqdists = neigh.kneighbors_graph(data, mode="distance") 
-    print(f"Data type of squared distance matrix: {type(sqdists)}")
-
-    ### Create Kernel
-    K = sqdists.copy()
-    K.data = np.exp(-K.data / (2*eps_kde))
-    print(f"Data type of kernel: {type(K)}")
-    K = 0.5*(K + K.T)
- 
-    kde = np.asarray(K.sum(axis=1)).ravel()
-    #kde *=  (1.0/num_samples)*(2*np.pi*epsilon)**(-num_features/2) 
-    
-    # Check sparsity of kernel
-    num_entries = K.shape[0]**2
-    nonzeros_ratio = K.nnz / (num_entries)
-    print(f"Ratio of nonzeros to zeros in kernel matrix: {nonzeros_ratio}")
-
+    neigh = NearestNeighbors(n_neighbors=512, metric='sqeuclidean')
+    neigh.fit(data.T)
+    sqdists = neigh.kneighbors_graph(data.T, mode="distance") 
+   
     ### Create Graph Laplacian
     K = sqdists.copy()
     K.data = np.exp(-K.data / (2*epsilon))
     print(f"Data type of kernel: {type(K)}")
     K = 0.5*(K + K.T)
  
+    kde = np.asarray(K.sum(axis=1)).ravel()
+ 
     u = (target_measure**(0.5)) / kde
     U = sps.spdiags(u, 0, num_samples, num_samples) 
     W = U @ K @ U
     stationary = np.asarray(W.sum(axis=1)).ravel()
-    inv_stationary = np.power(stationary, -1)
+    inv_stationary = stationary**(-1)
     P = sps.spdiags(inv_stationary, 0, num_samples, num_samples) @ W 
     L = (P - sps.eye(num_samples, num_samples))/epsilon
 
@@ -196,14 +136,13 @@ def create_laplacian(data, target_measure, eps_kde, epsilon):
 def solve_committor(L, B, C, num_samples):
 
     ### Solve Committor
-    Lcb = L[C, :]
-    Lcb = Lcb[:, B]
-    Lcc = L[C, :]
-    Lcc = Lcc[:, C]
+    Lcb = L[C, :][:, B]
+    Lcc = L[C, :][:, C]
 
     q = np.zeros(num_samples)
     q[B] = 1
-    row_sum = np.asarray(Lcb.sum(axis=1)).ravel()
+    #row_sum = np.asarray(Lcb.sum(axis=1))
+    row_sum = Lcb.sum(axis=1)
     q[C] = sps.linalg.spsolve(Lcc, -row_sum)
     return q
 
@@ -214,7 +153,7 @@ def create_laplacian_dense(data, target_measure, epsilon):
 
     print(epsilon)
     ### Create distance matrix
-    sqdists = cdist(data, data, 'sqeuclidean') 
+    sqdists = cdist(data.T, data.T, 'sqeuclidean') 
 
     ### Create Kernel
     K = np.exp(-sqdists / (2*epsilon))
