@@ -10,7 +10,7 @@ from scipy.spatial.distance import cdist
 def main():
 
     # Load data
-    fname = "systems/butane/data/butane_300K.npz"
+    fname = "systems/butane/data/butane_metad.npz"
     inData = np.load(fname)
     print("Keys in data:")
     print(list(inData.keys()))
@@ -23,8 +23,7 @@ def main():
     potential = inData["potential"]
     kbT = inData["kbT"]
     print(f"kbT for data:{kbT}")
-    #kbT_roomtemp = inData["kbT_roomtemp"]
-    kbT_roomtemp = kbT
+    kbT_roomtemp = inData["kbT_roomtemp"]
 
     print(f"kbT for room temperature:{kbT_roomtemp}")
 
@@ -118,7 +117,7 @@ def main():
 
     # Run diffusion map
     #epsilon  = optimal_eps
-    epsilon = 0.01
+    epsilon = 0.001
 
     [stationary, _, L] = create_laplacian_sparse(new_data, target_measure, epsilon=epsilon, n_neighbors=64)
     q = solve_committor_sparse(L, B, C, num_samples)
