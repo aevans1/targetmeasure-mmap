@@ -17,6 +17,7 @@ def main():
 
     data = inData["data"]
     #data = inData["data_all_atom"]
+    
     print("Data shape from trajectory:")
     print(data.shape)
     dihedrals = inData["dihedrals"]
@@ -28,9 +29,9 @@ def main():
     print(f"kbT for room temperature:{kbT_roomtemp}")
 
     # Load up delta net indices
-    #fname = "systems/butane/data/butane_metad_deltanet.npz"
-    #delta_idx = np.load(fname)["delta_idx"]
-    print(data.shape)
+    fname = "systems/butane/data/butane_metad_deltanet.npz"
+    delta_idx = np.load(fname)["delta_idx"]
+    #print(data.shape)
     # Adjust dihedral angles from [0, pi] for convenience
     dihedrals_shift = dihedrals.copy()
     dihedrals_shift[dihedrals < 0] = dihedrals_shift[dihedrals < 0] + 2*np.pi 
@@ -38,36 +39,21 @@ def main():
     # Define Target Measure
     target_measure = np.exp(-potential/(kbT_roomtemp))
     
-    # Subsample dataset
+    # Subsample dataset (in time or in space(deltanet) )
     indices = np.arange(data.shape[0])
-    sub_indices = indices[::2]
-    #sub_indices = delta_idx
+    #sub_indices = indices[::20]
+    sub_indices = delta_idx
     
     new_data = data[sub_indices, :]
     target_measure = np.exp(-potential[sub_indices]/(kbT_roomtemp))
     num_samples = new_data.shape[0]
     num_features = new_data.shape[1]
     print(f"number of samples for subsampled data:{num_samples}") 
+
+    # Try out Ksum test, likely to no avail...
     #eps_vals = 2.0**np.arange(-20, 0, 1)
-    #[Ksum, chi_log_analytical, eps_kde, effective_dim] = Ksum_test_unweighted(eps_vals, new_data)
-    #print(f"eps_kde = {eps_kde}")
-    #plt.figure()
-    #plt.plot(eps_vals, Ksum)
-    #plt.xscale("log", base=10)
-    #plt.yscale("log", base=10)
-    #plt.axvline(x=eps_kde, ls='--')
-
-    #plt.figure()
-    #plt.plot(eps_vals, chi_log_analytical)
-    #plt.title("log Ksums")
-    #plt.xscale("log", base=10)
-    #plt.yscale("log", base=10)
-    #plt.title("dlog_Sum/dlog_eps")
-    #plt.axvline(x=eps_kde, ls='--')
-    ##plt.savefig(fname, dpi=300)
-    #[Ksum, chi_log_analytical, optimal_eps] = Ksum_test_weighted(eps_vals, eps_kde, new_data, target_measure, d=effective_dim)
-
-    #print(f"optimal_eps = {optimal_eps}")
+    #[Ksum, chi_log_analytical, optimal_eps, effective_dim] = Ksum_test_unweighted(eps_vals, new_data, n_neighs=64)
+    #print(f"eps_kde = {optimal_eps}")
     #plt.figure()
     #plt.plot(eps_vals, Ksum)
     #plt.xscale("log", base=10)
@@ -80,13 +66,12 @@ def main():
     #plt.xscale("log", base=10)
     #plt.yscale("log", base=10)
     #plt.title("dlog_Sum/dlog_eps")
-    #plt.axvline(x=optimal_eps, ls='--')
+    #plt.axvline(x=eps_kde, ls='--')
     ##plt.savefig(fname, dpi=300)
-
-    radius = 0.1
-
-    OPTION = 1
     
+    # Try out different A, B sets for committor 
+    radius = 0.1
+    OPTION = 1
     if OPTION == 0: 
         Acenter = -np.pi/3
         A = np.abs(dihedrals[sub_indices] - Acenter) < radius
@@ -103,12 +88,9 @@ def main():
     elif OPTION == 3:
         A = np.abs(dihedrals[sub_indices]) < np.pi/3 + radius
         B = np.logical_or(np.abs(dihedrals[sub_indices] - np.pi) < radius, np.abs(dihedrals[sub_indices] + np.pi) < radius)
-    
     elif OPTION == 4:
         A = np.logical_or(np.abs(dihedrals[sub_indices] - np.pi/3) < radius,np.abs(dihedrals[sub_indices] + np.pi/3) < radius)
         B = np.logical_or(np.abs(dihedrals[sub_indices] - np.pi) < radius, np.abs(dihedrals[sub_indices] + np.pi) < radius)
-    
-
     print(f"samples in A:{new_data[A, :].shape[0]}")
     print(f"samples in B:{new_data[B, :].shape[0]}")
     C = np.ones(num_samples, dtype=bool)
@@ -116,34 +98,44 @@ def main():
     C[B] = False
 
     # Run diffusion map
-    #epsilon  = optimal_eps
-    epsilon = 0.001
+    epsilon = 0.2
+    DENSE = False
 
-    [stationary, _, L] = create_laplacian_sparse(new_data, target_measure, epsilon=epsilon, n_neighbors=64)
-    q = solve_committor_sparse(L, B, C, num_samples)
+    if DENSE:
+        print("dense dmaps!")
+        [stationary, _, L] = create_laplacian_dense(new_data, target_measure, epsilon=epsilon)
+        q = solve_committor_dense(L, B, C, num_samples)
+        eigvecs, _ = compute_spectrum_dense(L, stationary, num_eigvecs=4)
+
+    else:
+        n_neighbors = 512
+        print("sparse dmaps!")
+        [stationary, _, L] = create_laplacian_sparse(new_data, target_measure, epsilon=epsilon, n_neighbors=n_neighbors)
+        q = solve_committor_sparse(L, B, C, num_samples)
+        eigvecs, _ = compute_spectrum_sparse(L, stationary, num_eigvecs=4)
+
     plt.figure()
     plt.xlabel("dihedral")
     plt.ylabel("committor")
-    plt.scatter(dihedrals[sub_indices], q, s=0.1)
+    plt.scatter(dihedrals_shift[sub_indices], q, s=0.1)
     plt.title(f"committor, option={OPTION}, eps={epsilon}")
 
-    eigvecs, _ = compute_spectrum_sparse(L, stationary, num_eigvecs=4)
     plt.figure()
     plt.xlabel("dihedral")
     plt.ylabel("eigvec 1")
-    plt.scatter(dihedrals[sub_indices], eigvecs[:, 0], s=0.1)
+    plt.scatter(dihedrals_shift[sub_indices], eigvecs[:, 0], s=0.1)
     plt.title(f"eigvec1")
 
     plt.figure()
     plt.xlabel("dihedral")
     plt.ylabel("eigvec 2")
-    plt.scatter(dihedrals[sub_indices], eigvecs[:, 1], s=0.1)
+    plt.scatter(dihedrals_shift[sub_indices], eigvecs[:, 1], s=0.1)
     plt.title(f"eigvec2")
 
     plt.figure()
     plt.xlabel("dihedral")
     plt.ylabel("eigvec 3")
-    plt.scatter(dihedrals[sub_indices], eigvecs[:, 2], s=0.1)
+    plt.scatter(dihedrals_shift[sub_indices], eigvecs[:, 2], s=0.1)
     plt.title(f"eigvec3")
 
 
@@ -223,7 +215,7 @@ def create_laplacian_dense(data, target_measure, epsilon):
 
     ### Create distance matrix
     sqdists = cdist(data, data, 'sqeuclidean') 
-
+    
     ### Create Kernel
     K = np.exp(-sqdists / (2.0*epsilon))
 
@@ -240,19 +232,18 @@ def create_laplacian_dense(data, target_measure, epsilon):
 
 def solve_committor_dense(L, B, C, num_samples):
 
-    ### Solve Committor
     Lcb = L[C, :][:, B]
     Lcc = L[C, :][:, C]
 
     q = np.zeros(num_samples)
     q[B] = 1
-    row_sum = Lcb.sum(axis=1)
+    row_sum = Lcb.sum(axis=1).ravel()
     q[C] = np.linalg.solve(Lcc, -row_sum)
     return q
 
 def compute_spectrum_dense(L, stationary, num_eigvecs):
     # Symmetrize the generator 
-    Dinv_onehalf =  np.diags(stationary**(-0.5))
+    Dinv_onehalf =  np.diag(stationary**(-0.5))
     D_onehalf =  np.diag(stationary**(0.5))
     Lsymm = D_onehalf @ L @ Dinv_onehalf
 
@@ -269,9 +260,7 @@ def compute_spectrum_dense(L, stationary, num_eigvecs):
     return evecs, evals
 
 
-
-
-def Ksum_test_unweighted(eps_vals, data):
+def Ksum_test_unweighted(eps_vals, data, n_neighs):
 
     num_idx = eps_vals.shape[0]
     Ksum = np.zeros(num_idx)
@@ -281,7 +270,7 @@ def Ksum_test_unweighted(eps_vals, data):
     num_samples = data.shape[0]
     
     ### Create distance matrix
-    neigh = NearestNeighbors(n_neighbors=64, metric='sqeuclidean')
+    neigh = NearestNeighbors(n_neighbors=n_neighs, metric='sqeuclidean')
     neigh.fit(data)
     sqdists = neigh.kneighbors_graph(data, mode="distance") 
 
@@ -320,7 +309,7 @@ def Ksum_test_weighted(eps_vals, eps_kde, data, target_measure, d=None):
     num_samples = data.shape[0]
     
     ### Create distance matrix
-    neigh = NearestNeighbors(n_neighbors=64, metric='sqeuclidean')
+    neigh = NearestNeighbors(n_neighbors=512, metric='sqeuclidean')
     neigh.fit(data)
     sqdists = neigh.kneighbors_graph(data, mode="distance") 
     print(f"Data type of squared distance matrix: {type(sqdists)}")

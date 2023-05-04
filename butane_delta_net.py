@@ -32,10 +32,10 @@ def main():
     dihedrals_shift = dihedrals.copy()
     dihedrals_shift[dihedrals < 0] = dihedrals_shift[dihedrals < 0] + 2*np.pi 
 
-    #delta = 0.065
-    delta = 0.017
+    delta = 0.15
     [delta_idx, delta_net_data] = epsilon_net(data, delta)
     print(delta_net_data.shape)
+    
     fname = "systems/butane/data/butane_metad_deltanet.npz" 
     #fname = "systems/butane/data/butane_metad_deltanet_all_atom.npz" 
 
@@ -53,7 +53,6 @@ def epsilon_net(data, ϵ):
 
     while dense:
         current_point = data[current_point_index, :]# set current point
-        #ϵ_ball = np.where( (np.sum((data.T - current_point)**2, axis=1)) <=ϵ**2) # get indices for ϵ-balli
         dists = cdist(current_point[np.newaxis,:], data, metric="euclidean")[0]
         ϵ_ball = np.where(dists  <=ϵ) # get indices for ϵ-balli
         ϵ_net = np.delete(ϵ_net, np.where(np.isin(ϵ_net, ϵ_ball))) # kill elements from the ϵ-ball from the net
