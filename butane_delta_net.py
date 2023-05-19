@@ -21,12 +21,9 @@ def main():
     kbT_roomtemp = inData["kbT_roomtemp"]
     print(f"kbT for room temperature:{kbT_roomtemp}")
 
-    print(data.shape)
-    # Adjust dihedral angles from [0, pi] for convenience
-    dihedrals_shift = dihedrals.copy()
-    dihedrals_shift[dihedrals < 0] = dihedrals_shift[dihedrals < 0] + 2*np.pi 
-
     delta = 0.15
+    #delta = 0.156975
+    #delta = 0.14
     [delta_idx, delta_net_data] = epsilon_net(data, delta)
     print(delta_net_data.shape)
     

@@ -28,10 +28,6 @@ def main():
     # Load up delta net indices
     fname = "systems/butane/data/butane_metad_deltanet.npz"
     delta_idx = np.load(fname)["delta_idx"]
-    #print(data.shape)
-    # Adjust dihedral angles from [0, pi] for convenience
-    dihedrals_shift = dihedrals.copy()
-    dihedrals_shift[dihedrals < 0] = dihedrals_shift[dihedrals < 0] + 2*np.pi 
 
     # Define Target Measure
     target_measure = np.exp(-potential/(kbT_roomtemp))
@@ -68,26 +64,21 @@ def main():
     
     # Try out different A, B sets for committor 
     radius = 0.1
-    OPTION = 1
+    OPTION = 2
     if OPTION == 0: 
-        Acenter = -np.pi/3
+        Acenter = np.pi
+        Bcenter = 5*(np.pi/3)
         A = np.abs(dihedrals[sub_indices] - Acenter) < radius
-        B = np.logical_or(np.abs(dihedrals[sub_indices] - np.pi) < radius, np.abs(dihedrals[sub_indices] + np.pi) < radius)
+        B = np.abs(dihedrals[sub_indices] - Bcenter) < radius
     elif OPTION == 1:
-        Acenter = -np.pi/3
-        Bcenter = np.pi/3
+        Acenter = np.pi/3
+        Bcenter = 5*(np.pi/3)
         A = np.abs(dihedrals[sub_indices] - Acenter) < radius
         B = np.abs(dihedrals[sub_indices] - Bcenter) < radius
     elif OPTION == 2:
-        Acenter = -np.pi/3
+        Acenter = np.pi
         A = np.abs(dihedrals[sub_indices] - Acenter) < radius
-        B = np.logical_or(np.abs(dihedrals[sub_indices] - (2/3)*np.pi) < np.pi/3 + radius , np.abs(dihedrals[sub_indices] + np.pi) < radius)
-    elif OPTION == 3:
-        A = np.abs(dihedrals[sub_indices]) < np.pi/3 + radius
-        B = np.logical_or(np.abs(dihedrals[sub_indices] - np.pi) < radius, np.abs(dihedrals[sub_indices] + np.pi) < radius)
-    elif OPTION == 4:
-        A = np.logical_or(np.abs(dihedrals[sub_indices] - np.pi/3) < radius,np.abs(dihedrals[sub_indices] + np.pi/3) < radius)
-        B = np.logical_or(np.abs(dihedrals[sub_indices] - np.pi) < radius, np.abs(dihedrals[sub_indices] + np.pi) < radius)
+        B = np.logical_or(np.abs(dihedrals[sub_indices] - np.pi/3) < radius,np.abs(dihedrals[sub_indices] - 5*(np.pi/3)) < radius)
     print(f"samples in A:{new_data[A, :].shape[0]}")
     print(f"samples in B:{new_data[B, :].shape[0]}")
     C = np.ones(num_samples, dtype=bool)
@@ -95,7 +86,7 @@ def main():
     C[B] = False
 
     # Run diffusion map
-    epsilon = 0.2
+    epsilon = 0.1
     DENSE = False
 
     if DENSE:
@@ -107,34 +98,46 @@ def main():
     else:
         n_neighbors = 512
         print("sparse dmaps!")
-        [stationary, _, L] = create_laplacian_sparse(new_data, target_measure, epsilon=epsilon, n_neighbors=n_neighbors)
+        [stationary, K, L] = create_laplacian_sparse(new_data, target_measure, epsilon=epsilon, n_neighbors=n_neighbors)
         q = solve_committor_sparse(L, B, C, num_samples)
-        eigvecs, _ = compute_spectrum_sparse(L, stationary, num_eigvecs=4)
+        diffcoords, eigvecs, eigvals = compute_spectrum_sparse(L, stationary, num_eigvecs=4)
+        #fric = 0.01 #friction in femtoseconds
+        #mass = 12.01 #mass in amus
+        #rate = (1/fric)*mass*compute_rate_sparse(L, K, target_measure, q, beta=(1/kbT), effective_dim=12, epsilon=epsilon)
+        rate = compute_rate_sparse(L, K, target_measure, q, beta=(1/kbT), effective_dim=12, epsilon=epsilon)
+        print(rate)
 
     plt.figure()
     plt.xlabel("dihedral")
     plt.ylabel("committor")
-    plt.scatter(dihedrals_shift[sub_indices], q, s=0.1)
+    plt.scatter(dihedrals[sub_indices], q, s=0.1)
     plt.title(f"committor, option={OPTION}, eps={epsilon}")
 
     plt.figure()
     plt.xlabel("dihedral")
     plt.ylabel("eigvec 1")
-    plt.scatter(dihedrals_shift[sub_indices], eigvecs[:, 0], s=0.1)
+    plt.scatter(dihedrals[sub_indices], eigvecs[:, 0], s=0.1)
     plt.title(f"eigvec1")
 
     plt.figure()
     plt.xlabel("dihedral")
     plt.ylabel("eigvec 2")
-    plt.scatter(dihedrals_shift[sub_indices], eigvecs[:, 1], s=0.1)
+    plt.scatter(dihedrals[sub_indices], eigvecs[:, 1], s=0.1)
     plt.title(f"eigvec2")
 
     plt.figure()
     plt.xlabel("dihedral")
     plt.ylabel("eigvec 3")
-    plt.scatter(dihedrals_shift[sub_indices], eigvecs[:, 2], s=0.1)
+    plt.scatter(dihedrals[sub_indices], eigvecs[:, 2], s=0.1)
     plt.title(f"eigvec3")
 
+    fig = plt.figure()
+    ax = fig.add_subplot(projection='3d')
+    s=ax.scatter(diffcoords[:, 0], diffcoords[:, 1], diffcoords[:, 2], c=dihedrals[sub_indices], cmap='hsv', s=0.5)
+    ax.set_xlabel('eigvec1')
+    ax.set_ylabel('eigvec2')
+    ax.set_zlabel('eigvec3')
+    fig.colorbar(s)
 
     plt.show() 
     return None
@@ -203,7 +206,8 @@ def compute_spectrum_sparse(L, stationary, num_eigvecs):
     idx = evals.argsort()[::-1][1:]     # Ignore first eigval / eigfunc
     evals = np.real(evals[idx])
     evecs = np.real(evecs[:, idx])
-    return evecs, evals
+    dmap = np.dot(evecs, np.diag(np.sqrt(-1./evals)))
+    return dmap, evecs, evals
 
 def create_laplacian_dense(data, target_measure, epsilon):
 
@@ -346,6 +350,17 @@ def Ksum_test_weighted(eps_vals, eps_kde, data, target_measure, d=None):
         print("\n") 
         optimal_eps = eps_vals[np.nanargmax(chi_log_analytical)]
     return [Ksum, chi_log_analytical, optimal_eps]
+
+def compute_rate_sparse(L, K, target_measure, q, beta, effective_dim, epsilon):
+    N = L.shape[0]
+    kde = np.asarray(K.sum(axis=1)).ravel()
+    #kde *=  (1.0/N)*(2*np.pi*epsilon)**(-effective_dim/2) 
+    kde *= (1./np.sum(kde))
+    Z_dmap = (1.0/N)*np.sum(target_measure / kde)
+    weight_Zdmap = (target_measure/(kde*Z_dmap)).flatten()
+    Q = q[np.newaxis, ...] - q[:, np.newaxis, ...]
+    rate = (1/beta)*(1/N)*np.sum(weight_Zdmap[:, np.newaxis]*(L.toarray())*(Q**2))
+    return rate
 
 if __name__ == '__main__':
     main()
