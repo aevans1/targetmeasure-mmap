@@ -87,13 +87,15 @@ def main():
 
     # Run diffusion map
     epsilon = 0.1
-    DENSE = False
+    DENSE = True
 
     if DENSE:
         print("dense dmaps!")
-        [stationary, _, L] = create_laplacian_dense(new_data, target_measure, epsilon=epsilon)
+        [stationary, K, L] = create_laplacian_dense(new_data, target_measure, epsilon=epsilon)
         q = solve_committor_dense(L, B, C, num_samples)
-        eigvecs, _ = compute_spectrum_dense(L, stationary, num_eigvecs=4)
+        diffcoords, eigvecs, eigvals = compute_spectrum_dense(L, stationary, num_eigvecs=4)
+        rate = compute_rate_dense(L, K, target_measure, q, beta=(1/kbT), effective_dim=12, epsilon=epsilon, C=C)
+        print(rate)
 
     else:
         n_neighbors = 512
@@ -104,7 +106,7 @@ def main():
         #fric = 0.01 #friction in femtoseconds
         #mass = 12.01 #mass in amus
         #rate = (1/fric)*mass*compute_rate_sparse(L, K, target_measure, q, beta=(1/kbT), effective_dim=12, epsilon=epsilon)
-        rate = compute_rate_sparse(L, K, target_measure, q, beta=(1/kbT), effective_dim=12, epsilon=epsilon)
+        rate = compute_rate_sparse(L, K, target_measure, q, beta=(1/kbT), effective_dim=12, epsilon=epsilon, C=C)
         print(rate)
 
     plt.figure()
@@ -258,7 +260,8 @@ def compute_spectrum_dense(L, stationary, num_eigvecs):
     idx = evals.argsort()[::-1][1:]     # Ignore first eigval / eigfunc
     evals = np.real(evals[idx])
     evecs = np.real(evecs[:, idx])
-    return evecs, evals
+    dmap = np.dot(evecs, np.diag(np.sqrt(-1./evals)))
+    return dmap, evecs, evals
 
 
 def Ksum_test_unweighted(eps_vals, data, n_neighs):
@@ -351,15 +354,28 @@ def Ksum_test_weighted(eps_vals, eps_kde, data, target_measure, d=None):
         optimal_eps = eps_vals[np.nanargmax(chi_log_analytical)]
     return [Ksum, chi_log_analytical, optimal_eps]
 
-def compute_rate_sparse(L, K, target_measure, q, beta, effective_dim, epsilon):
+def compute_rate_sparse(L, K, target_measure, q, beta, effective_dim, epsilon, C):
     N = L.shape[0]
     kde = np.asarray(K.sum(axis=1)).ravel()
     #kde *=  (1.0/N)*(2*np.pi*epsilon)**(-effective_dim/2) 
     kde *= (1./np.sum(kde))
     Z_dmap = (1.0/N)*np.sum(target_measure / kde)
     weight_Zdmap = (target_measure/(kde*Z_dmap)).flatten()
-    Q = q[np.newaxis, ...] - q[:, np.newaxis, ...]
-    rate = (1/beta)*(1/N)*np.sum(weight_Zdmap[:, np.newaxis]*(L.toarray())*(Q**2))
+    
+    # Note: for i in C, both sum_j L_ij = 0 and sum_j Lij qj = 0, so sum_ij L_ij (q_j - q_i)**2 = sum_ij L_ij q_j*2 
+    rate = (1/beta)*(1/np.count_nonzero(C))*np.sum(weight_Zdmap[C]*L[C, :].toarray().dot(q**2))
+    return rate
+
+def compute_rate_dense(L, K, target_measure, q, beta, effective_dim, epsilon, C):
+    N = L.shape[0]
+    kde = np.asarray(K.sum(axis=1)).ravel()
+    #kde *=  (1.0/N)*(2*np.pi*epsilon)**(-effective_dim/2) 
+    kde *= (1./np.sum(kde))
+    Z_dmap = (1.0/N)*np.sum(target_measure / kde)
+    weight_Zdmap = (target_measure/(kde*Z_dmap)).flatten()
+    
+    # Note: for i in C, both sum_j L_ij = 0 and sum_j Lij qj = 0, so sum_ij L_ij (q_j - q_i)**2 = sum_ij L_ij q_j*2 
+    rate = (1/beta)*(1/np.count_nonzero(C))*np.sum(weight_Zdmap[C]*L[C, :].dot(q**2))
     return rate
 
 if __name__ == '__main__':
